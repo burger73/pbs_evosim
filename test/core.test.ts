@@ -141,6 +141,13 @@ describe('Kultur', () => {
     for (let i = 0; i < 5; i++) w.step();
     expect(has(pupil.skills, SKILL.werkzeug)).toBe(true);
   });
+  it('erkennt den Kipppunkt und markiert ihn genau einmal', () => {
+    const w = new World(cfg({ ...quiet, cultureUnlocked: true, discoveryRate: 0, maxPopulation: 20, baseCost: 0, moveCost: 0, senseCost: 0, intellectCost: 0, reproFactor: 1e9 }));
+    for (let i = 0; i < 20; i++) w.spawn({ ...primordialGenome(w.rng), intellect: 0.9 }, 30 * i, 100, 100).skills = { mask: 0b111, extra: 0 };
+    for (let i = 0; i < 100; i++) w.step();
+    expect(w.tippingTick).not.toBeNull();
+    expect(w.events.filter((e) => e.label === 'Kipppunkt')).toHaveLength(1);
+  });
   it('Waffen schützen vor Räubern', () => {
     const w = new World(cfg(quiet));
     const pred = w.spawn({ ...primordialGenome(w.rng), size: 2.5, diet: 1 }, 100, 100, 50);

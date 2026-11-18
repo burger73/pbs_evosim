@@ -54,6 +54,8 @@ export const SAMPLE_EVERY = 10;
 /** Ab diesem Ernährungswert kann ein Organismus andere fressen. */
 export const PREDATOR_DIET = 0.3;
 const MAX_SAMPLES = 2000;
+export const TIPPING_SHARE = 0.1;
+export const TIPPING_SKILLS = 3;
 
 export class World {
   readonly rng: Rng;
@@ -66,6 +68,10 @@ export class World {
   events: SimEvent[] = [];
   /** Letzte Artenzählung (für die Anzeige). */
   speciesCount = 1;
+  /** Seit wann Kultur möglich ist (Tick), und wann der Kipppunkt erreicht wurde. */
+  cultureSince: number | null = null;
+  tippingTick: number | null = null;
+  private tippingStreak = 0;
   private readonly neighborBuf: number[] = [];
 
   private nextId = 1;
@@ -274,6 +280,7 @@ export class World {
       }
     }
 
+    if (cfg.cultureUnlocked && this.cultureSince === null) this.cultureSince = this.tick;
     if (cfg.cultureUnlocked && cfg.mode === 'natur') this.culture();
     if (cfg.mode === 'natur') this.naturalSelection();
     this.compactFood();
@@ -423,6 +430,19 @@ export class World {
     }
   }
 
+  /**
+   * Kipppunkt: mindestens 10 % Kulturträger mit im Schnitt ≥ 3 Fähigkeiten, 5 Messungen in Folge.
+   * In Tests mit 12 Seeds gab es danach nie ein Zurück – der Zeitpunkt selbst ist aber unvorhersehbar.
+   */
+  private detectTipping(s: Sample): void {
+    if (!this.cfg.cultureUnlocked || this.tippingTick !== null) return;
+    this.tippingStreak = s.topShare >= TIPPING_SHARE && s.topSkills >= TIPPING_SKILLS ? this.tippingStreak + 1 : 0;
+    if (this.tippingStreak >= 5) {
+      this.tippingTick = this.tick;
+      this.addEvent('Kipppunkt');
+    }
+  }
+
   private record(): void {
     const os = this.organisms;
     const n = os.length || 1;
@@ -459,6 +479,7 @@ export class World {
       topShare: cult / n,
       maxSkills: maxSk,
     });
+    this.detectTipping(this.samples[this.samples.length - 1]);
     if (this.samples.length > MAX_SAMPLES) this.samples.splice(0, this.samples.length - MAX_SAMPLES);
   }
 }

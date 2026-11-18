@@ -73,6 +73,7 @@ main {
   font-variant-numeric: tabular-nums; color: var(--muted);
 }
 .stats b { color: var(--fg); font-weight: 600; }
+.stats .tipped { color: var(--cult); }
 
 .panel { display: flex; flex-direction: column; gap: 12px; }
 fieldset {

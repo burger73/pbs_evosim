@@ -2,7 +2,7 @@ import './style.css';
 import { defaultConfig, FITNESS_LABELS, type Fitness, type Mode, type SimConfig } from '../core/config.ts';
 import { LIMITS } from '../core/genome.ts';
 import { SKILLS, has, skillCount } from '../core/skills.ts';
-import { World, type Organism } from '../core/world.ts';
+import { TIPPING_SHARE, TIPPING_SKILLS, World, type Organism } from '../core/world.ts';
 import { css, drawChart, drawWorld } from './render.ts';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -157,7 +157,17 @@ function renderStats(): void {
     `Räuber <b>${s?.predators ?? 0}</b>`,
     `Arten <b>${world.speciesCount}</b>`,
   ];
-  if (cfg.cultureUnlocked) parts.push(`Kulturträger <b>${Math.round((s?.topShare ?? 0) * 100)} %</b>`, `Rekord <b>${s?.maxSkills ?? 0}</b> Fähigkeiten`);
+  if (cfg.cultureUnlocked) {
+    parts.push(`Kulturträger <b>${Math.round((s?.topShare ?? 0) * 100)} %</b>`, `Rekord <b>${s?.maxSkills ?? 0}</b> Fähigkeiten`);
+    if (world.tippingTick !== null) {
+      parts.push(`<b class="tipped">⚡ Kipppunkt bei ${world.tippingTick}</b> (${world.tippingTick - (world.cultureSince ?? 0)} nach Kultur)`);
+    } else {
+      // Frühwarnung: wie nah sind Anteil und Wissen der Kulturträger an der Schwelle?
+      const share = Math.min(1, (s?.topShare ?? 0) / TIPPING_SHARE);
+      const know = Math.min(1, (s?.topSkills ?? 0) / TIPPING_SKILLS);
+      parts.push(`Inkubation · Anteil <b>${Math.round(share * 100)} %</b> · Wissen <b>${Math.round(know * 100)} %</b> der Schwelle`);
+    }
+  }
   if (cfg.mode === 'schiedsrichter') parts.push(`Generation <b>${world.generation}</b>`);
   statsEl.innerHTML = parts.map((p) => `<span>${p}</span>`).join('');
 }
