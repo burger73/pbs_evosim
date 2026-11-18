@@ -1,0 +1,112 @@
+:root {
+  --bg: #f6f5f1;
+  --fg: #1d1f21;
+  --muted: #6b6f73;
+  --panel: #ffffff;
+  --border: #dedcd6;
+  --world: #fbfaf7;
+  --food: #6aa84f;
+  --accent: #2f6fdf;
+  --pop: #3b9b5a;
+  --pred: #d1453b;
+  --spec: #2f6fdf;
+  --size: #8e5cc8;
+  --speed: #e08a1e;
+  --sense: #1aa3a3;
+  --diet: #d1453b;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141517;
+    --fg: #e6e6e3;
+    --muted: #9a9ea3;
+    --panel: #1d1f22;
+    --border: #2e3135;
+    --world: #101113;
+    --food: #4f8a3a;
+    --accent: #6d9cf0;
+    --pop: #5cc27d;
+    --pred: #ef6a5f;
+    --spec: #6d9cf0;
+    --size: #b48be6;
+    --speed: #f0a94c;
+    --sense: #3cc6c6;
+    --diet: #ef6a5f;
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--fg); }
+body { font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; padding: 16px; }
+
+header { max-width: 1400px; margin: 0 auto 12px; }
+header h1 { margin: 0 0 4px; font-size: 1.5rem; }
+header p { margin: 0; color: var(--muted); max-width: 75ch; }
+body.embed header { display: none; }
+
+main {
+  max-width: 1400px; margin: 0 auto;
+  display: grid; gap: 16px;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  align-items: start;
+}
+@media (max-width: 900px) { main { grid-template-columns: minmax(0, 1fr); } }
+
+.stage { position: relative; }
+#world {
+  width: 100%; aspect-ratio: 3 / 2; display: block;
+  background: var(--world); border: 1px solid var(--border); border-radius: 8px;
+  cursor: crosshair;
+}
+.stats {
+  display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 8px;
+  font-variant-numeric: tabular-nums; color: var(--muted);
+}
+.stats b { color: var(--fg); font-weight: 600; }
+
+.panel { display: flex; flex-direction: column; gap: 12px; }
+fieldset {
+  margin: 0; padding: 10px 12px 12px; background: var(--panel);
+  border: 1px solid var(--border); border-radius: 8px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+legend { font-weight: 600; padding: 0 4px; }
+label { display: flex; flex-direction: column; gap: 2px; }
+label:has(> input[type="radio"]) { flex-direction: row; align-items: center; gap: 6px; }
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+output { color: var(--muted); font-variant-numeric: tabular-nums; }
+select, input[type="number"] {
+  font: inherit; padding: 4px 6px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--bg); color: var(--fg);
+}
+.row { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; }
+.seed { flex-direction: row; align-items: center; gap: 6px; margin-left: auto; }
+.seed input { width: 6em; }
+button {
+  font: inherit; padding: 6px 12px; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--bg); color: var(--fg);
+}
+button:hover { border-color: var(--accent); }
+button:disabled { opacity: 0.55; cursor: default; }
+
+figure { margin: 0; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+figcaption { font-size: 0.82rem; color: var(--muted); margin-bottom: 4px; }
+.chart { width: 100%; height: 120px; display: block; }
+.c-pop { color: var(--pop); } .c-pred { color: var(--pred); } .c-spec { color: var(--spec); }
+.c-size { color: var(--size); } .c-speed { color: var(--speed); } .c-sense { color: var(--sense); } .c-diet { color: var(--diet); }
+
+.selected {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
+  font-variant-numeric: tabular-nums;
+}
+.selected h3 { margin: 0 0 6px; font-size: 1rem; display: flex; align-items: center; gap: 8px; }
+.selected .swatch { width: 14px; height: 14px; border-radius: 50%; display: inline-block; }
+.selected dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 0; }
+.selected dt { color: var(--muted); }
+.selected dd { margin: 0; }
+.hint { color: var(--muted); font-size: 0.82rem; margin: 0; }
+
+body.mode-natur .judge-only { display: none; }
+body.mode-schiedsrichter .nature-only { display: none; }

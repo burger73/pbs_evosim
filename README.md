@@ -1,0 +1,33 @@
+# EvoSim
+
+Evolution im Browser: Kleine Lebewesen mit vererbtem Körper (Größe, Tempo, Sicht, Ernährung, Farbe)
+und vererbtem Gehirn (winziges neuronales Netz). Niemand programmiert ihr Verhalten – es entsteht durch
+**Variation** (Mutation beim Teilen) und **Selektion**.
+
+- **Natur:** Die Umwelt selektiert. Wer genug Energie sammelt, teilt sich; wer nicht, stirbt. Räuber entstehen von selbst.
+- **Schiedsrichter:** Ein festgelegtes Kriterium entscheidet nach jeder Generation, wer sich fortpflanzt –
+  z. B. „wer am rötesten ist“. Die Population wird rot, obwohl Röte fürs Überleben nichts bringt.
+- **Kambrium-Experimente:** Augen freischalten, Sauerstoff (Futterwachstum) und Mutationsrate zur Laufzeit ändern.
+
+Begleitet die Blog-Artikel „Die Kambrische Explosion der Software“ und
+„Die Evolution braucht keine Vorbilder – aber einen Schiedsrichter“.
+
+## Entwickeln
+
+```sh
+npm install
+npm run dev        # Entwicklungs-Server
+npm test           # Tests (Vitest)
+npm run build      # Typprüfung + Build nach dist/
+node scripts/headless.ts 8000 4000 42   # Simulation ohne Oberfläche: Ticks, Augen ab Tick, Seed
+```
+
+URL-Parameter: `?seed=42`, `?vorlauf=4000` (Schritte vorrechnen), `?augen=2000` (Augen bei Schritt …), `?embed` (ohne Kopfzeile).
+
+## Aufbau
+
+- `src/core/` – Simulation ohne Browser-Abhängigkeit (deterministisch per Seed, testbar)
+- `src/ui/` – Canvas-Darstellung und Bedienung
+- `test/` – Tests
+
+Lizenz: MIT

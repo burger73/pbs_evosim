@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EvoSim</title>
+    <meta name="description" content="Evolution im Browser: Variation, Selektion – und wer ist der Schiedsrichter?" />
+  </head>
+  <body>
+    <header id="intro">
+      <h1>EvoSim</h1>
+      <p>
+        Kleine Lebewesen mit vererbtem Körper und Gehirn. Niemand programmiert ihr Verhalten –
+        es entsteht durch <strong>Variation</strong> (Mutation beim Teilen) und <strong>Selektion</strong>.
+        Im Modus <em>Natur</em> entscheidet allein die Umwelt, wer überlebt. Im Modus <em>Schiedsrichter</em>
+        legst du fest, wer sich fortpflanzen darf.
+      </p>
+    </header>
+
+    <main>
+      <section class="stage">
+        <canvas id="world" aria-label="Simulationswelt"></canvas>
+        <div class="stats" id="stats"></div>
+      </section>
+
+      <aside class="panel">
+        <fieldset>
+          <legend>Modus</legend>
+          <label><input type="radio" name="mode" value="natur" checked /> Natur – die Umwelt selektiert</label>
+          <label><input type="radio" name="mode" value="schiedsrichter" /> Schiedsrichter – du selektierst</label>
+          <label class="judge-only">Kriterium
+            <select id="fitness"></select>
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Steuerung</legend>
+          <div class="row">
+            <button id="play" type="button">⏸ Pause</button>
+            <button id="restart" type="button">↺ Neu</button>
+            <label class="seed">Seed <input id="seed" type="number" value="42" /></label>
+          </div>
+          <label>Tempo <output id="speedOut"></output>
+            <input id="speed" type="range" min="1" max="30" value="4" />
+          </label>
+          <label>Mutation <output id="mutOut"></output>
+            <input id="mutation" type="range" min="0" max="3" step="0.1" value="1" />
+          </label>
+        </fieldset>
+
+        <fieldset class="nature-only">
+          <legend>Kambrium-Experimente</legend>
+          <button id="eyes" type="button">👁 Augen freischalten</button>
+          <label>Sauerstoff (Futterwachstum) <output id="oxyOut"></output>
+            <input id="oxygen" type="range" min="0.2" max="3" step="0.1" value="1" />
+          </label>
+        </fieldset>
+
+        <figure>
+          <figcaption>Population · <span class="c-pop">Pflanzenfresser</span> · <span class="c-pred">Räuber</span> · <span class="c-spec">Arten</span></figcaption>
+          <canvas id="chartPop" class="chart"></canvas>
+        </figure>
+        <figure>
+          <figcaption>Merkmale (Ø) · <span class="c-size">Größe</span> · <span class="c-speed">Tempo</span> · <span class="c-sense">Sicht</span> · <span class="c-diet">Räuber-Anteil der Ernährung</span></figcaption>
+          <canvas id="chartTraits" class="chart"></canvas>
+        </figure>
+
+        <div id="selected" class="selected" hidden></div>
+        <p class="hint">Tipp: Klick auf ein Lebewesen zeigt sein Erbgut.</p>
+      </aside>
+    </main>
+    <script type="module" src="/src/ui/main.ts"></script>
+  </body>
+</html>
