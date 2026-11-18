@@ -1,3 +1,4 @@
+import { skillCount } from '../core/skills.ts';
 import type { Organism, Sample, SimEvent, World } from '../core/world.ts';
 
 export const css = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -28,6 +29,7 @@ export function drawWorld(canvas: HTMLCanvasElement, world: World, selected: Org
 
   // Lebewesen
   const predColor = css('--pred');
+  const cultColor = css('--cult');
   for (const o of world.organisms) {
     const r = world.radius(o) * k;
     const x = o.x * k, y = o.y * k;
@@ -39,6 +41,15 @@ export function drawWorld(canvas: HTMLCanvasElement, world: World, selected: Org
     if (pred) {
       ctx.lineWidth = Math.max(1.5, r * 0.25);
       ctx.strokeStyle = predColor;
+      ctx.stroke();
+    }
+    // Kulturträger: goldener Ring, dicker je mehr Fähigkeiten
+    const sk = skillCount(o.skills);
+    if (sk > 0) {
+      ctx.beginPath();
+      ctx.arc(x, y, r + 2 * k, 0, Math.PI * 2);
+      ctx.lineWidth = Math.max(1, Math.min(4, 0.6 + Math.log2(1 + sk) * 0.5) * k);
+      ctx.strokeStyle = cultColor;
       ctx.stroke();
     }
     // Blickrichtung

@@ -60,6 +60,20 @@ export interface SimConfig {
 
   mutationRate: number;
 
+  /** Kultur: Fähigkeiten können entdeckt, gelernt und weitergegeben werden. */
+  cultureUnlocked: boolean;
+  /** Energiekosten des Gehirns pro Tick bei Intelligenz 1. */
+  intellectCost: number;
+  /** Grundwahrscheinlichkeit pro Tick, eine Fähigkeit zu entdecken (× Intelligenz²). */
+  discoveryRate: number;
+  /** Ab dieser Intelligenz kann von anderen gelernt und an Kinder weitergegeben werden. */
+  learnThreshold: number;
+  learnRate: number;
+  /** Wahrscheinlichkeit, dass eine Fähigkeit an ein Kind weitergegeben wird (ohne Schrift). */
+  transmission: number;
+  /** Landwirtschaft: Wahrscheinlichkeit pro Tick, nahebei Futter anzubauen. */
+  farmRate: number;
+
   generationTicks: number;
   judgePopulation: number;
   eliteFraction: number;
@@ -104,6 +118,14 @@ export function defaultConfig(): SimConfig {
     bodyEnergy: 20,
 
     mutationRate: 1,
+
+    cultureUnlocked: false,
+    intellectCost: 0.06,
+    discoveryRate: 0.01,
+    learnThreshold: 0.3,
+    learnRate: 0.05,
+    transmission: 0.85,
+    farmRate: 0.05,
 
     generationTicks: 400,
     judgePopulation: 150,

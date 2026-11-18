@@ -16,6 +16,8 @@ export interface Genome {
   sense: number;
   /** Ernährung: 0 = Pflanzenfresser, 1 = Räuber. */
   diet: number;
+  /** Gehirngröße / Intelligenz (0..1). Teuer – lohnt sich erst, wenn Kultur möglich ist. */
+  intellect: number;
   /** Farbe als Farbwinkel 0..360 – neutrales Merkmal. */
   hue: number;
   /** Gewichte des Gehirns. */
@@ -27,6 +29,7 @@ export const LIMITS = {
   speed: [0.1, 2],
   sense: [0, 1],
   diet: [0, 1],
+  intellect: [0, 1],
 } as const;
 
 const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);
@@ -41,6 +44,7 @@ export function primordialGenome(rng: Rng): Genome {
     speed: clamp(0.8 + rng.gauss() * 0.15, ...LIMITS.speed),
     sense: clamp(0.25 + rng.gauss() * 0.1, ...LIMITS.sense),
     diet: clamp(0.05 + Math.abs(rng.gauss()) * 0.05, ...LIMITS.diet),
+    intellect: clamp(0.1 + rng.gauss() * 0.04, ...LIMITS.intellect),
     hue: wrapHue(120 + rng.gauss() * 6),
     brain,
   };
@@ -61,6 +65,7 @@ export function mutate(g: Genome, rng: Rng, rate: number): Genome {
     speed: m(g.speed, 0.06, LIMITS.speed),
     sense: m(g.sense, 0.04, LIMITS.sense),
     diet: m(g.diet, 0.05, LIMITS.diet),
+    intellect: m(g.intellect, 0.04, LIMITS.intellect),
     hue: wrapHue(g.hue + rng.gauss() * 8 * rate),
     brain,
   };
@@ -78,6 +83,7 @@ export function genomeDistance(a: Genome, b: Genome): number {
   const dv = (a.speed - b.speed) / 1.9;
   const de = a.sense - b.sense;
   const dd = (a.diet - b.diet) * 2;
+  const di = (a.intellect - b.intellect) * 1.5;
   const dh = (hueDistance(a.hue, b.hue) / 180) * 0.8;
-  return Math.sqrt(ds * ds + dv * dv + de * de + dd * dd + dh * dh);
+  return Math.sqrt(ds * ds + dv * dv + de * de + dd * dd + di * di + dh * dh);
 }

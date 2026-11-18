@@ -49,8 +49,9 @@
         </fieldset>
 
         <fieldset class="nature-only">
-          <legend>Kambrium-Experimente</legend>
+          <legend>Experimente</legend>
           <button id="eyes" type="button">👁 Augen freischalten</button>
+          <button id="culture" type="button">🧠 Kultur freischalten</button>
           <label>Sauerstoff (Futterwachstum) <output id="oxyOut"></output>
             <input id="oxygen" type="range" min="0.2" max="3" step="0.1" value="1" />
           </label>
@@ -60,8 +61,12 @@
           <figcaption>Population · <span class="c-pop">Pflanzenfresser</span> · <span class="c-pred">Räuber</span> · <span class="c-spec">Arten</span></figcaption>
           <canvas id="chartPop" class="chart"></canvas>
         </figure>
+        <figure class="nature-only">
+          <figcaption>Fähigkeiten (Messlatte) · <span class="c-cult">Kulturträger</span> · <span class="c-rest">alle anderen</span> · <span class="c-share">Anteil Kulturträger</span></figcaption>
+          <canvas id="chartSkills" class="chart"></canvas>
+        </figure>
         <figure>
-          <figcaption>Merkmale (Ø) · <span class="c-size">Größe</span> · <span class="c-speed">Tempo</span> · <span class="c-sense">Sicht</span> · <span class="c-diet">Räuber-Anteil der Ernährung</span></figcaption>
+          <figcaption>Merkmale (Ø) · <span class="c-size">Größe</span> · <span class="c-speed">Tempo</span> · <span class="c-sense">Sicht</span> · <span class="c-diet">Räuber-Anteil der Ernährung</span> · <span class="c-intel">Intelligenz</span></figcaption>
           <canvas id="chartTraits" class="chart"></canvas>
         </figure>
 

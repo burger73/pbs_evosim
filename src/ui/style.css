@@ -14,6 +14,10 @@
   --speed: #e08a1e;
   --sense: #1aa3a3;
   --diet: #d1453b;
+  --intel: #c9a000;
+  --cult: #c9a000;
+  --rest: #8a8f94;
+  --share: #2f6fdf;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -33,6 +37,10 @@
     --speed: #f0a94c;
     --sense: #3cc6c6;
     --diet: #ef6a5f;
+    --intel: #f2c94c;
+    --cult: #f2c94c;
+    --rest: #8a8f94;
+    --share: #6d9cf0;
     color-scheme: dark;
   }
 }
@@ -95,6 +103,8 @@ figure { margin: 0; background: var(--panel); border: 1px solid var(--border); b
 figcaption { font-size: 0.82rem; color: var(--muted); margin-bottom: 4px; }
 .chart { width: 100%; height: 120px; display: block; }
 .c-pop { color: var(--pop); } .c-pred { color: var(--pred); } .c-spec { color: var(--spec); }
+.c-intel { color: var(--intel); } .c-cult { color: var(--cult); } .c-rest { color: var(--rest); } .c-share { color: var(--share); }
+.skills { margin-top: 6px; font-size: 1.1rem; letter-spacing: 2px; }
 .c-size { color: var(--size); } .c-speed { color: var(--speed); } .c-sense { color: var(--sense); } .c-diet { color: var(--diet); }
 
 .selected {

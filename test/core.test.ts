@@ -4,6 +4,7 @@ import { LIMITS, hueDistance, mutate, primordialGenome } from '../src/core/genom
 import { Grid } from '../src/core/grid.ts';
 import { Rng } from '../src/core/rng.ts';
 import { clusterSpecies } from '../src/core/species.ts';
+import { SKILL, available, has, skillCount } from '../src/core/skills.ts';
 import { World } from '../src/core/world.ts';
 
 const cfg = (o: Partial<SimConfig> = {}): SimConfig => ({ ...defaultConfig(), ...o });
@@ -58,8 +59,9 @@ describe('Grid', () => {
 describe('Arten', () => {
   it('erkennt zwei deutlich verschiedene Gruppen', () => {
     const rng = new Rng(5);
-    const a = Array.from({ length: 20 }, () => ({ ...primordialGenome(rng), hue: 0, diet: 0 }));
-    const b = Array.from({ length: 20 }, () => ({ ...primordialGenome(rng), hue: 180, diet: 1, size: 2.5 }));
+    const base = { speed: 1, sense: 0.3, intellect: 0.1 };
+    const a = Array.from({ length: 20 }, () => ({ ...primordialGenome(rng), ...base, hue: 0, diet: 0, size: 1 }));
+    const b = Array.from({ length: 20 }, () => ({ ...primordialGenome(rng), ...base, hue: 180, diet: 1, size: 2.5 }));
     expect(clusterSpecies([...a, ...b])).toHaveLength(2);
   });
 });
@@ -102,5 +104,48 @@ describe('World – Schiedsrichter', () => {
     for (let i = 0; i < 20 * 40; i++) w.step();
     expect(w.generation).toBe(40);
     expect(redness()).toBeLessThan(start - 40);
+  });
+});
+
+describe('Kultur', () => {
+  const quiet = { initialPopulation: 0, minPopulation: 0, maxFood: 0 };
+  it('ohne freigeschaltete Kultur entsteht keine Fähigkeit', () => {
+    const w = new World(cfg({ ...quiet, discoveryRate: 1 }));
+    const o = w.spawn({ ...primordialGenome(w.rng), intellect: 1 }, 100, 100, 1e6);
+    for (let i = 0; i < 50; i++) w.step();
+    expect(skillCount(o.skills)).toBe(0);
+  });
+  it('Entdeckungen respektieren den Technologie-Baum', () => {
+    expect(available({ mask: 0, extra: 0 })).toEqual([SKILL.werkzeug, SKILL.sprache]);
+    const w = new World(cfg({ ...quiet, cultureUnlocked: true, discoveryRate: 1, maxPopulation: 1 }));
+    const o = w.spawn({ ...primordialGenome(w.rng), intellect: 1 }, 100, 100, 1e6);
+    for (let i = 0; i < 200; i++) w.step();
+    expect(skillCount(o.skills)).toBeGreaterThan(9); // alle benannten + weitere Erfindungen
+    expect(has(o.skills, SKILL.schrift)).toBe(true);
+  });
+  it('Kinder dummer Eltern erben nichts, Kinder kluger Eltern schon', () => {
+    for (const [intellect, expectSkills] of [[0.1, false], [0.9, true]] as const) {
+      const w = new World(cfg({ ...quiet, cultureUnlocked: true, discoveryRate: 0, transmission: 1 }));
+      w.spawn({ ...primordialGenome(w.rng), intellect }, 100, 100, 1000).skills = { mask: 0b11, extra: 0 };
+      w.step();
+      const child = w.organisms.find((o) => o.age === 0)!;
+      expect(skillCount(child.skills) > 0).toBe(expectSkills);
+    }
+  });
+  it('lernt von klügeren Nachbarn', () => {
+    const w = new World(cfg({ ...quiet, cultureUnlocked: true, discoveryRate: 0, learnRate: 1, maxPopulation: 2 }));
+    const g = { ...primordialGenome(w.rng), intellect: 1, speed: 0.1 };
+    const teacher = w.spawn(g, 100, 100, 50);
+    teacher.skills = { mask: 1 << SKILL.werkzeug, extra: 0 };
+    const pupil = w.spawn(g, 110, 100, 50);
+    for (let i = 0; i < 5; i++) w.step();
+    expect(has(pupil.skills, SKILL.werkzeug)).toBe(true);
+  });
+  it('Waffen schützen vor Räubern', () => {
+    const w = new World(cfg(quiet));
+    const pred = w.spawn({ ...primordialGenome(w.rng), size: 2.5, diet: 1 }, 100, 100, 50);
+    const armed = w.spawn({ ...primordialGenome(w.rng), size: 0.6, diet: 0 }, 103, 100, 50);
+    armed.skills = { mask: 1 << SKILL.waffen, extra: 0 };
+    expect(w.canEat(pred, armed)).toBe(false);
   });
 });

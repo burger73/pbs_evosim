@@ -1,8 +1,9 @@
 import { N_IN, think } from './brain.ts';
 import type { Fitness, SimConfig } from './config.ts';
-import { hueDistance, mutate, primordialGenome, type Genome } from './genome.ts';
+import { genomeDistance, hueDistance, mutate, primordialGenome, type Genome } from './genome.ts';
 import { Grid, wrapDelta } from './grid.ts';
 import { Rng } from './rng.ts';
+import { SKILL, available, extraBonus, has, noSkills, skillCount, type Skills } from './skills.ts';
 import { clusterSpecies } from './species.ts';
 
 export interface Organism {
@@ -19,6 +20,8 @@ export interface Organism {
   /** Für den Schiedsrichter: gefressene Futterstücke und zurückgelegte Strecke. */
   eaten: number;
   travelled: number;
+  /** Erlernte Fähigkeiten (Kultur). */
+  skills: Skills;
 }
 
 export interface Sample {
@@ -31,6 +34,15 @@ export interface Sample {
   avgSpeed: number;
   avgSense: number;
   avgDiet: number;
+  avgIntellect: number;
+  /** Ø Fähigkeiten der Kulturträger (Intelligenz über der Lernschwelle). */
+  topSkills: number;
+  /** Ø Fähigkeiten aller übrigen. */
+  otherSkills: number;
+  /** Anteil der Kulturträger an der Population (0..1). */
+  topShare: number;
+  /** Höchste Zahl an Fähigkeiten eines einzelnen Lebewesens. */
+  maxSkills: number;
 }
 
 export interface SimEvent {
@@ -54,6 +66,7 @@ export class World {
   events: SimEvent[] = [];
   /** Letzte Artenzählung (für die Anzeige). */
   speciesCount = 1;
+  private readonly neighborBuf: number[] = [];
 
   private nextId = 1;
   private foodAcc = 0;
@@ -91,12 +104,33 @@ export class World {
     return o.genome.diet > PREDATOR_DIET;
   }
 
+  /** Kann jagen: Räuber von Natur aus – oder durch erlernte Jagd/Waffen. */
+  isHunter(o: Organism): boolean {
+    return this.isPredator(o) || has(o.skills, SKILL.jagd) || has(o.skills, SKILL.waffen);
+  }
+
   canEat(a: Organism, b: Organism): boolean {
-    return (
-      this.cfg.mode === 'natur' &&
-      this.isPredator(a) &&
-      this.radius(a) > this.cfg.predatorSizeRatio * this.radius(b)
-    );
+    if (this.cfg.mode !== 'natur') return false;
+    const aW = has(a.skills, SKILL.waffen), bW = has(b.skills, SKILL.waffen);
+    if (bW && !aW) return false; // Waffen schützen
+    const ra = this.radius(a), rb = this.radius(b);
+    // Werkzeug-Jagd richtet sich nicht gegen andere Kulturträger
+    const fairGame = b.genome.intellect <= this.cfg.learnThreshold;
+    if (aW && !bW && ra * 2 > rb && fairGame) return true;
+    if (has(a.skills, SKILL.jagd) && ra * 1.5 > rb && fairGame) return true;
+    return this.isPredator(a) && ra > this.cfg.predatorSizeRatio * rb;
+  }
+
+  maxAge(o: Organism): number {
+    let m = this.cfg.maxAge;
+    if (has(o.skills, SKILL.kleidung)) m *= 1.2;
+    if (has(o.skills, SKILL.medizin)) m *= 1.5;
+    return m;
+  }
+
+  /** Kann lernen und Wissen an Kinder weitergeben? */
+  isCultural(o: Organism): boolean {
+    return this.cfg.cultureUnlocked && o.genome.intellect > this.cfg.learnThreshold;
   }
 
   addEvent(label: string): void {
@@ -116,16 +150,17 @@ export class World {
       alive: true,
       eaten: 0,
       travelled: 0,
+      skills: noSkills(),
     };
     this.organisms.push(o);
     return o;
   }
 
-  private addFood(): void {
-    if (this.foodX.length >= this.cfg.maxFood) return;
-    this.foodX.push(this.rng.range(0, this.cfg.width));
-    this.foodY.push(this.rng.range(0, this.cfg.height));
-    this.foodAlive.push(true);
+  private addFood(x?: number, y?: number, limit = this.cfg.maxFood): void {
+    if (this.foodX.length >= limit) return;
+    this.foodX.push(x ?? this.rng.range(0, this.cfg.width));
+    this.foodY.push(y ?? this.rng.range(0, this.cfg.height));
+    this.foodAlive.push(true); // im Raster erst ab dem nächsten Tick
   }
 
   private rebuildGrids(): void {
@@ -164,7 +199,7 @@ export class World {
         if (d2 < foodD2) { foodD2 = d2; foodDx = dx; foodDy = dy; }
       });
       let preyD2 = R2, preyDx = 0, preyDy = 0, threatD2 = R2, threatDx = 0, threatDy = 0;
-      const oPred = this.isPredator(o);
+      const oPred = this.isHunter(o);
       this.orgGrid.forEachNear(o.x, o.y, R, (qi) => {
         const q = this.organisms[qi];
         if (q === o || !q.alive) return;
@@ -200,10 +235,12 @@ export class World {
 
       // --- Energiekosten ------------------------------------------------
       const area = o.genome.size * o.genome.size;
-      o.energy -= cfg.baseCost * area + cfg.moveCost * area * v * v + cfg.senseCost * (R / cfg.maxSense);
+      const fire = has(o.skills, SKILL.feuer) ? 0.7 : 1;
+      const I = o.genome.intellect;
+      o.energy -= cfg.baseCost * area * fire + cfg.moveCost * area * v * v + cfg.senseCost * (R / cfg.maxSense) + cfg.intellectCost * I * I;
 
       // --- Fressen: Pflanzen -------------------------------------------
-      const plantGain = cfg.foodEnergy * (1 - o.genome.diet);
+      const plantGain = cfg.foodEnergy * (1 - o.genome.diet) * (has(o.skills, SKILL.werkzeug) ? 1.4 : 1) * extraBonus(o.skills);
       if (o.genome.diet < 0.8) {
         const reach = r + cfg.foodRadius;
         this.foodGrid.forEachNear(o.x, o.y, reach, (fi) => {
@@ -219,7 +256,7 @@ export class World {
       }
 
       // --- Fressen: Beute ----------------------------------------------
-      if (this.isPredator(o) && cfg.mode === 'natur') {
+      if (this.isHunter(o) && cfg.mode === 'natur') {
         this.orgGrid.forEachNear(o.x, o.y, r * 2, (qi) => {
           const q = this.organisms[qi];
           if (q === o || !q.alive || !this.canEat(o, q)) return;
@@ -229,13 +266,15 @@ export class World {
           if (dx * dx + dy * dy < reach * reach) {
             q.alive = false;
             const qArea = q.genome.size * q.genome.size;
-            o.energy += (Math.max(0, q.energy) + cfg.bodyEnergy * qArea) * cfg.predationEfficiency * o.genome.diet;
+            const eff = this.isPredator(o) ? o.genome.diet : 0.6; // Jäger mit Werkzeug verwerten Beute gut
+            o.energy += (Math.max(0, q.energy) + cfg.bodyEnergy * qArea) * cfg.predationEfficiency * eff;
             o.eaten++;
           }
         });
       }
     }
 
+    if (cfg.cultureUnlocked && cfg.mode === 'natur') this.culture();
     if (cfg.mode === 'natur') this.naturalSelection();
     this.compactFood();
     this.growFood();
@@ -250,7 +289,7 @@ export class World {
     const survivors: Organism[] = [];
     const babies: Organism[] = [];
     for (const o of this.organisms) {
-      if (!o.alive || o.energy <= 0 || o.age > cfg.maxAge) { o.alive = false; continue; }
+      if (!o.alive || o.energy <= 0 || o.age > this.maxAge(o)) { o.alive = false; continue; }
       survivors.push(o);
     }
     this.organisms = survivors;
@@ -271,6 +310,7 @@ export class World {
           alive: true,
           eaten: 0,
           travelled: 0,
+          skills: this.inherit(o),
         };
         babies.push(child);
       }
@@ -280,6 +320,71 @@ export class World {
       if (this.organisms.length === 0) this.addEvent('Ausgestorben – Urformen wandern ein');
       while (this.organisms.length < cfg.minPopulation) this.spawn(primordialGenome(this.rng));
     }
+  }
+
+  /**
+   * Kultur: entdecken, voneinander lernen, Landwirtschaft.
+   * Entdecken wird umso wahrscheinlicher, je mehr man schon kann (Wissen kombiniert sich).
+   */
+  private culture(): void {
+    const cfg = this.cfg;
+    const buf = this.neighborBuf;
+    for (let idx = 0; idx < this.organisms.length; idx++) {
+      const o = this.organisms[idx];
+      if (!o.alive) continue;
+      const I = o.genome.intellect;
+      const n = skillCount(o.skills);
+
+      // Entdecken
+      if (this.rng.chance(cfg.discoveryRate * I * I * (1 + 0.2 * n))) this.learnSomething(o.skills, null);
+
+      // Von anderen lernen (nur oberhalb der Schwelle)
+      if (I > cfg.learnThreshold) {
+        const p = cfg.learnRate * ((I - cfg.learnThreshold) / (1 - cfg.learnThreshold)) * (has(o.skills, SKILL.sprache) ? 3 : 1);
+        if (this.rng.chance(p)) {
+          const range = has(o.skills, SKILL.schrift) ? 180 : 60;
+          buf.length = 0;
+          this.orgGrid.forEachNear(o.x, o.y, range, (qi) => {
+            const q = this.organisms[qi];
+            if (q !== o && q.alive && q.genome.intellect > cfg.learnThreshold && skillCount(q.skills) > n) buf.push(qi);
+          });
+          // gelernt wird nur von der eigenen Art (gemeinsame „Sprache“)
+          const own = buf.filter((qi) => genomeDistance(this.organisms[qi].genome, o.genome) < 0.4);
+          if (own.length) this.learnSomething(o.skills, this.organisms[own[this.rng.int(own.length)]].skills);
+        }
+      }
+
+      // Landwirtschaft: Futter in der Nähe anbauen
+      if (has(o.skills, SKILL.landwirtschaft) && this.rng.chance(cfg.farmRate)) {
+        this.addFood(
+          (o.x + this.rng.gauss() * 25 + cfg.width) % cfg.width,
+          (o.y + this.rng.gauss() * 25 + cfg.height) % cfg.height,
+          cfg.maxFood * 1.5,
+        );
+      }
+    }
+  }
+
+  /** Eine neue Fähigkeit erwerben – selbst entdeckt (teacher = null) oder von einem Vorbild gelernt. */
+  private learnSomething(s: Skills, teacher: Skills | null): void {
+    let options = available(s);
+    if (teacher) options = options.filter((i) => has(teacher, i));
+    if (options.length) {
+      s.mask |= 1 << options[this.rng.int(options.length)];
+    } else if (!teacher ? available(s).length === 0 : teacher.extra > s.extra && available(s).length === 0) {
+      s.extra++;
+    }
+  }
+
+  /** Weitergabe an ein Kind – nur bei ausreichender Intelligenz, mit Verlusten (ohne Schrift). */
+  private inherit(parent: Organism): Skills {
+    if (!this.isCultural(parent)) return noSkills();
+    const written = has(parent.skills, SKILL.schrift);
+    const keep = written ? 1 : this.cfg.transmission;
+    let mask = 0;
+    for (let i = 0; i < 31; i++) if ((parent.skills.mask >> i) & 1 && this.rng.chance(keep)) mask |= 1 << i;
+    const extra = written ? parent.skills.extra : Math.floor(parent.skills.extra * keep);
+    return { mask, extra };
   }
 
   /** Schiedsrichter: Am Generationsende pflanzen sich nur die „Besten“ fort. */
@@ -321,16 +426,22 @@ export class World {
   private record(): void {
     const os = this.organisms;
     const n = os.length || 1;
-    let pred = 0, s = 0, v = 0, e = 0, d = 0;
+    let pred = 0, s = 0, v = 0, e = 0, d = 0, intel = 0;
+    let cult = 0, cultSk = 0, restSk = 0, maxSk = 0;
     for (const o of os) {
-      if (this.isPredator(o)) pred++;
+      const k = skillCount(o.skills);
+      if (k > maxSk) maxSk = k;
+      if (o.genome.intellect > this.cfg.learnThreshold) { cult++; cultSk += k; } else restSk += k;
+      if (this.isPredator(o) && !this.isCultural(o)) pred++; // „wilde“ Räuber
       s += o.genome.size;
       v += o.genome.speed;
       e += o.genome.sense;
       d += o.genome.diet;
+      intel += o.genome.intellect;
     }
     if (this.tick % (SAMPLE_EVERY * 5) === 0) {
-      this.speciesCount = clusterSpecies(os.map((o) => o.genome)).length;
+      const clusters = clusterSpecies(os.map((o) => o.genome));
+      this.speciesCount = clusters.length;
     }
     this.samples.push({
       tick: this.tick,
@@ -342,6 +453,11 @@ export class World {
       avgSpeed: v / n,
       avgSense: e / n,
       avgDiet: d / n,
+      avgIntellect: intel / n,
+      topSkills: cult ? cultSk / cult : 0,
+      otherSkills: os.length - cult ? restSk / (os.length - cult) : 0,
+      topShare: cult / n,
+      maxSkills: maxSk,
     });
     if (this.samples.length > MAX_SAMPLES) this.samples.splice(0, this.samples.length - MAX_SAMPLES);
   }

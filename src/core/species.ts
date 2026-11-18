@@ -3,6 +3,8 @@ import { genomeDistance, type Genome } from './genome.ts';
 export interface SpeciesCluster {
   representative: Genome;
   members: number;
+  /** Indizes (ins Eingabe-Array) der gezählten Mitglieder. */
+  indices: number[];
 }
 
 /**
@@ -29,8 +31,8 @@ export function clusterSpecies(
         best = c;
       }
     }
-    if (best) best.members++;
-    else clusters.push({ representative: g, members: 1 });
+    if (best) { best.members++; best.indices.push(i); }
+    else clusters.push({ representative: g, members: 1, indices: [i] });
   }
   return clusters.filter((c) => c.members >= minMembers).sort((a, b) => b.members - a.members);
 }
