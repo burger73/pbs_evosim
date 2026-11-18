@@ -30,4 +30,6 @@ URL-Parameter: `?seed=42`, `?vorlauf=4000` (Schritte vorrechnen), `?augen=2000` 
 - `src/ui/` – Canvas-Darstellung und Bedienung
 - `test/` – Tests
 
+Live: https://burger73.github.io/pbs_evosim/
+
 Lizenz: MIT

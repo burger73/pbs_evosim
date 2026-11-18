@@ -1,5 +1,5 @@
 # CI: bei jedem Push und Pull Request typprüfen, testen, bauen.
-# CD: Stand auf main wird als GitHub Pages veröffentlicht (burger73.github.io/evosim/).
+# CD: Stand auf main wird als GitHub Pages veröffentlicht (burger73.github.io/pbs_evosim/).
 name: CI
 
 on:
