@@ -1,8 +1,12 @@
 import './style.css';
 import { CRISES, defaultConfig, FITNESS_LABELS, type CrisisKind, type Fitness, type Mode, type SimConfig } from '../core/config.ts';
-import { LIMITS, genomeDistance } from '../core/genome.ts';
+import { LIMITS } from '../core/genome.ts';
 import { EPOCHS, SKILLS, has } from '../core/skills.ts';
-import { LEADER_MIN_MEMBERS, TIPPING_SHARE, TIPPING_SKILLS, World, type Organism, type SpeciesStat } from '../core/world.ts';
+import {
+  LEADER_MIN_MEMBERS, MAX_CENSUS, MAX_SAMPLES, TIPPING_SHARE, TIPPING_SKILLS,
+  type Census, type CrisisReport, type ExtinctSpecies, type Sample, type SimEvent, type SpeciesStat,
+} from '../core/types.ts';
+import type { PlannedAction, Snapshot, ToWorker } from '../sim/protocol.ts';
 import { css, drawChart, drawSpeciesChart, drawWorld } from './render.ts';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -30,6 +34,7 @@ const zoomIn = $<HTMLInputElement>('zoom');
 const leaderEl = $('leader');
 const pauseQuick = $<HTMLButtonElement>('pauseQuick');
 const pausedBadge = $('pausedBadge');
+const loadingBadge = $('loadingBadge');
 const topTable = $<HTMLTableElement>('topTable');
 const topHint = $('topHint');
 const extinctTable = $<HTMLTableElement>('extinctTable');
@@ -37,11 +42,27 @@ const crisisBtns = Array.from(document.querySelectorAll<HTMLButtonElement>('[dat
 
 for (const [k, label] of Object.entries(FITNESS_LABELS)) fitnessSel.add(new Option(label, k));
 
+// Die Simulation läuft in einem Web Worker; hier kommen nur Momentaufnahmen an.
+const sim = new Worker(new URL('../sim/worker.ts', import.meta.url), { type: 'module' });
+const send = (m: ToWorker) => sim.postMessage(m);
+
 let cfg: SimConfig;
-let world: World;
+/** Letzte Momentaufnahme und die daraus gesammelten Listen (der Worker schickt nur Neues). */
+let snap: Snapshot | null = null;
+const view = {
+  samples: [] as Sample[],
+  census: [] as Census[],
+  events: [] as SimEvent[],
+  extinct: [] as ExtinctSpecies[],
+  reports: [] as CrisisReport[],
+};
+/** Eine run-Anfrage ist unterwegs – erst nach der Antwort die nächste. */
+let pending = false;
+let firstStart = true;
 let running = true;
-let selected: Organism | null = null;
 let frame = 0;
+// Gemessenes Tempo (Schritte pro Sekunde)
+let rateSteps = 0, rateSince = performance.now(), stepsPerSecond = 0;
 let shownReports = 0;
 /** In der Tabelle ausgewählte Art (wird in der Welt hervorgehoben). */
 let picked: number | null = null;
@@ -63,8 +84,11 @@ function restart(): void {
     cultureBoost: Number(boostIn.value),
     randomCrises: randomIn.checked,
   };
-  world = new World(cfg);
-  selected = null;
+  const prerun = firstStart ? Math.min(50000, Number(params.get('vorlauf') ?? 0)) : 0;
+  firstStart = false;
+  send({ type: 'init', cfg, planned, prerun });
+  pending = true;
+  if (prerun > 0) { loadingBadge.textContent = `⏳ Vorlauf: ${prerun} Schritte werden gerechnet …`; loadingBadge.hidden = false; }
   selectedEl.hidden = true;
   reportEl.hidden = true;
   shownReports = 0;
@@ -72,28 +96,45 @@ function restart(): void {
   shownCensus = '';
   document.body.classList.toggle('mode-natur', cfg.mode === 'natur');
   document.body.classList.toggle('mode-schiedsrichter', cfg.mode === 'schiedsrichter');
-  if (cfg.mode === 'schiedsrichter') world.addEvent(`Schiedsrichter: ${FITNESS_LABELS[cfg.fitness]}`);
 }
 
+sim.onmessage = (ev: MessageEvent<Snapshot>) => {
+  const s = ev.data;
+  if (s.reset) {
+    view.samples = []; view.census = []; view.events = []; view.extinct = []; view.reports = [];
+  }
+  view.samples.push(...s.newSamples);
+  view.census.push(...s.newCensus);
+  view.events.push(...s.newEvents);
+  if (view.samples.length > MAX_SAMPLES) view.samples.splice(0, view.samples.length - MAX_SAMPLES);
+  if (view.census.length > MAX_CENSUS) view.census.splice(0, view.census.length - MAX_CENSUS);
+  if (s.extinct) view.extinct = s.extinct;
+  if (s.crisisReports) view.reports = s.crisisReports;
+  snap = s;
+  pending = false;
+  loadingBadge.hidden = true;
+  if (!s.reset) rateSteps += s.steps;
+  const now = performance.now();
+  if (now - rateSince > 1000) {
+    stepsPerSecond = (rateSteps * 1000) / (now - rateSince);
+    rateSteps = 0;
+    rateSince = now;
+    updateOutputs();
+  }
+};
+
 // --- Geplante Ereignisse per URL: ?augen=T ?eiszeit=T ?duerre=T ?vulkan=T ----------
-const planned: [number, () => void][] = [];
-if (params.has('augen')) planned.push([Number(params.get('augen')), () => { if (!cfg.eyesUnlocked) { cfg.eyesUnlocked = true; world.addEvent('👁️ Augen für alle'); } }]);
+const planned: PlannedAction[] = [];
+if (params.has('augen')) planned.push({ tick: Number(params.get('augen')), action: 'augen' });
 for (const kind of Object.keys(CRISES) as CrisisKind[]) {
-  if (params.has(kind)) planned.push([Number(params.get(kind)), () => world.startCrisis(kind)]);
-}
-function scheduled(): void {
-  for (const [t, fn] of planned) if (world.tick === t) fn();
-}
-function prerun(): void {
-  const n = Math.min(50000, Number(params.get('vorlauf') ?? 0));
-  for (let i = 0; i < n; i++) { scheduled(); world.step(); }
+  if (params.has(kind)) planned.push({ tick: Number(params.get(kind)), action: kind });
 }
 
 const boostLabel = (v: number) =>
   v === 0 ? 'aus – Kultur unmöglich' : v <= 20 ? 'sehr selten' : v <= 45 ? 'selten' : v <= 65 ? 'mittel' : v <= 85 ? 'häufig' : 'fast sicher';
 
 function updateOutputs(): void {
-  $('speedOut').textContent = `${speedIn.value}× pro Bild`;
+  $('speedOut').textContent = `${speedIn.value}× pro Bild` + (running && stepsPerSecond > 0 ? ` · ≈ ${Math.round(stepsPerSecond)} Schritte/s` : '');
   $('zoomOut').textContent = `${Number(zoomIn.value).toFixed(2).replace(/\.?0+$/, '')}×`;
   $('mutOut').textContent = `${Number(mutIn.value).toFixed(1)}×`;
   $('oxyOut').textContent = `${Number(oxyIn.value).toFixed(1)}×`;
@@ -111,6 +152,7 @@ function setRunning(on: boolean): void {
   pauseQuick.textContent = running ? '⏸' : '▶';
   pauseQuick.classList.toggle('paused', !running);
   pausedBadge.hidden = running;
+  updateOutputs();
 }
 playBtn.addEventListener('click', () => setRunning(!running));
 pauseQuick.addEventListener('click', () => setRunning(!running));
@@ -123,27 +165,23 @@ document.addEventListener('keydown', (ev) => {
 });
 speedIn.addEventListener('input', updateOutputs);
 zoomIn.addEventListener('input', updateOutputs);
-mutIn.addEventListener('input', () => { cfg.mutationRate = Number(mutIn.value); updateOutputs(); });
-mutIn.addEventListener('change', () => world.addEvent(`Mutation ${Number(mutIn.value).toFixed(1)}×`));
-oxyIn.addEventListener('input', () => { cfg.oxygen = Number(oxyIn.value); updateOutputs(); });
-oxyIn.addEventListener('change', () => world.addEvent(`O₂ ${Number(oxyIn.value).toFixed(1)}×`));
-boostIn.addEventListener('input', () => { cfg.cultureBoost = Number(boostIn.value); updateOutputs(); });
-boostIn.addEventListener('change', () => world.addEvent(`Anschwung ${boostIn.value}`));
-randomIn.addEventListener('change', () => { cfg.randomCrises = randomIn.checked; });
-for (const b of crisisBtns) b.addEventListener('click', () => world.startCrisis(b.dataset.crisis as CrisisKind));
+/** Regler: beim Ziehen nur den Wert setzen, beim Loslassen zusätzlich ein Ereignis im Verlauf. */
+function slider(el: HTMLInputElement, apply: (v: number) => Partial<SimConfig>, label: (v: number) => string): void {
+  el.addEventListener('input', () => { const p = apply(Number(el.value)); Object.assign(cfg, p); send({ type: 'set', patch: p }); updateOutputs(); });
+  el.addEventListener('change', () => send({ type: 'set', patch: apply(Number(el.value)), event: label(Number(el.value)) }));
+}
+slider(mutIn, (v) => ({ mutationRate: v }), (v) => `Mutation ${v.toFixed(1)}×`);
+slider(oxyIn, (v) => ({ oxygen: v }), (v) => `O₂ ${v.toFixed(1)}×`);
+slider(boostIn, (v) => ({ cultureBoost: v }), (v) => `Anschwung ${v}`);
+randomIn.addEventListener('change', () => { cfg.randomCrises = randomIn.checked; send({ type: 'set', patch: { randomCrises: randomIn.checked } }); });
+for (const b of crisisBtns) b.addEventListener('click', () => send({ type: 'crisis', kind: b.dataset.crisis as CrisisKind }));
 
 worldCanvas.addEventListener('click', (ev) => {
   const rect = worldCanvas.getBoundingClientRect();
   const x = ((ev.clientX - rect.left) / rect.width) * cfg.width;
   const y = ((ev.clientY - rect.top) / rect.height) * cfg.height;
-  let best: Organism | null = null;
-  let bestD = 30 * 30;
-  for (const o of world.organisms) {
-    const d = (o.x - x) ** 2 + (o.y - y) ** 2;
-    if (d < bestD) { bestD = d; best = o; }
-  }
-  selected = best;
-  renderSelected();
+  send({ type: 'select', x, y });
+  if (!running) send({ type: 'run', steps: 0 }); // auch angehalten sofort anzeigen
 });
 
 // --- Anzeige -----------------------------------------------------------
@@ -162,22 +200,20 @@ const swatch = (hue: number) => `<span class="swatch" style="background:hsl(${hu
 const icons = (mask: number) => SKILLS.filter((_, i) => has(mask, i)).map((d) => `<span title="${d.label}: ${d.effect}">${d.icon}</span>`).join(' ');
 
 function renderSelected(): void {
-  if (!selected) { selectedEl.hidden = true; return; }
-  const o = selected;
-  const g = o.genome;
-  const learnedOnly = o.learned.mask & ~g.skills;
+  const o = snap?.selected;
+  if (!o) { selectedEl.hidden = true; return; }
   selectedEl.hidden = false;
   selectedEl.innerHTML = `
-    <h3><span class="swatch" style="background:hsl(${g.hue} 65% 52%)"></span>
+    <h3><span class="swatch" style="background:hsl(${o.hue} 65% 52%)"></span>
       Lebewesen #${o.id} ${o.alive ? '' : '† (gestorben)'}</h3>
     <dl>
-      <dt>Rolle</dt><dd>${g.culture ? '🧠 Kulturträger' : world.isPredator(o) ? 'Räuber' : 'Pflanzenfresser'}</dd>
-      <dt>Größe</dt><dd>${bar(g.size, LIMITS.size)} ${g.size.toFixed(2)}</dd>
-      <dt>Tempo</dt><dd>${bar(g.speed, LIMITS.speed)} ${g.speed.toFixed(2)}</dd>
-      <dt>Sicht</dt><dd>${bar(g.sense, LIMITS.sense)} ${g.sense.toFixed(2)}</dd>
-      <dt>Ernährung</dt><dd>${bar(g.diet, LIMITS.diet)} ${(g.diet * 100).toFixed(0)} % Räuber</dd>
-      <dt>Vererbt</dt><dd class="skills">${icons(g.skills) || '–'}</dd>
-      <dt>Gelernt</dt><dd class="skills">${icons(learnedOnly) || '–'}${o.learned.extra ? ` <small>+ ${o.learned.extra} Erfindungen</small>` : ''}</dd>
+      <dt>Rolle</dt><dd>${o.role === 'kultur' ? '🧠 Kulturträger' : o.role === 'raeuber' ? 'Räuber' : 'Pflanzenfresser'}</dd>
+      <dt>Größe</dt><dd>${bar(o.size, LIMITS.size)} ${o.size.toFixed(2)}</dd>
+      <dt>Tempo</dt><dd>${bar(o.speed, LIMITS.speed)} ${o.speed.toFixed(2)}</dd>
+      <dt>Sicht</dt><dd>${bar(o.sense, LIMITS.sense)} ${o.sense.toFixed(2)}</dd>
+      <dt>Ernährung</dt><dd>${bar(o.diet, LIMITS.diet)} ${(o.diet * 100).toFixed(0)} % Räuber</dd>
+      <dt>Vererbt</dt><dd class="skills">${icons(o.skills) || '–'}</dd>
+      <dt>Gelernt</dt><dd class="skills">${icons(o.learnedOnly) || '–'}${o.extra ? ` <small>+ ${o.extra} Erfindungen</small>` : ''}</dd>
       <dt>Energie</dt><dd>${o.energy.toFixed(0)}</dd>
       <dt>Alter</dt><dd>${o.age}</dd>
       <dt>Vorfahren</dt><dd>${o.lineage} Generationen bis zur Urform</dd>
@@ -185,61 +221,63 @@ function renderSelected(): void {
 }
 
 function renderStats(): void {
-  const s = world.samples[world.samples.length - 1];
+  const w = snap!;
+  const s = view.samples[view.samples.length - 1];
+  if (!s) return;
   const parts = [
-    `Zeit <b>${world.tick}</b>`,
-    `Population <b>${world.organisms.length}</b>`,
+    `Zeit <b>${w.tick}</b>`,
+    `Population <b>${w.population}</b>`,
     `wilde Räuber <b>${s.predators}</b>`,
-    `Arten <b>${world.speciesCount}</b>`,
+    `Arten <b>${w.speciesCount}</b>`,
     `Ø Fähigkeiten <b>${s.avgSkills < 10 ? s.avgSkills.toFixed(1) : Math.round(s.avgSkills)}</b>`,
   ];
   if (s.fertility < 0.99) parts.push(`Boden <b class="${s.fertility < 0.5 ? 'crisis' : ''}">${Math.round(s.fertility * 100)} %</b>`);
   if (s.infected > 0) parts.push(`krank <b class="crisis">${Math.round(s.infected * 100)} %</b>`);
-  if (cfg.mode === 'schiedsrichter') parts.push(`Generation <b>${world.generation}</b>`);
-  if (world.crisis) {
-    const def = CRISES[world.crisis.kind];
-    parts.push(`<b class="crisis">${def.icon} ${def.label}: noch ${world.crisis.until - world.tick}</b>`);
+  if (cfg.mode === 'schiedsrichter') parts.push(`Generation <b>${w.generation}</b>`);
+  if (w.crisis) {
+    const def = CRISES[w.crisis.kind];
+    parts.push(`<b class="crisis">${def.icon} ${def.label}: noch ${w.crisis.until - w.tick}</b>`);
   }
   statsEl.innerHTML = parts.map((p) => `<span>${p}</span>`).join('');
-  for (const b of crisisBtns) b.disabled = !!world.crisis;
+  for (const b of crisisBtns) b.disabled = !!w.crisis;
 
   if (cfg.mode !== 'natur') { cultureEl.innerHTML = ''; return; }
   const c: string[] = [];
   if (cfg.cultureBoost === 0) c.push('Kultur: <b>aus</b> (Anschwung 0)');
-  else if (world.tippingTick !== null) {
+  else if (w.tippingTick !== null) {
     const ep = s.epoch > 0 ? EPOCHS[s.epoch - 1] : null;
-    c.push(`<b class="tipped">⚡ Kultur-Kipppunkt bei ${world.tippingTick}</b>`,
+    c.push(`<b class="tipped">⚡ Kultur-Kipppunkt bei ${w.tippingTick}</b>`,
       ep ? `Epoche <b>${ep.icon} ${ep.name}</b> (${s.epoch}/${EPOCHS.length})` : 'Kultur erloschen',
       `Kulturträger <b>${Math.round(s.population * s.cultureShare)}</b>`, `Rekord <b>${s.maxSkills}</b> Fähigkeiten`);
   } else if (s.cultureShare > 0) {
     c.push(`🔥 Funke! Kulturträger <b>${Math.round(s.cultureShare * 100)} %</b> (Schwelle ${TIPPING_SHARE * 100} %)`, `ihr Wissen <b>${s.cultureSkills.toFixed(1)}</b> (Schwelle ${TIPPING_SKILLS})`);
   } else {
     c.push(`Kultur: noch kein Funke`, `kick-bereit (≥ ${cfg.kickMinSkills} vererbte Fähigkeiten): <b>${s.kickReady}</b>`);
-    if (world.firstSpark !== null) c.push('<span class="muted">(frühere Funken verpufft)</span>');
+    if (w.firstSpark !== null) c.push('<span class="muted">(frühere Funken verpufft)</span>');
   }
   cultureEl.innerHTML = c.map((p) => `<span>${p}</span>`).join('');
 }
 
 function renderLeader(): void {
-  const l = world.leader;
+  const l = snap!.leader;
   leaderEl.hidden = cfg.mode !== 'natur';
   if (!l) { leaderEl.innerHTML = '🏆 <span class="muted">noch kein Spitzenreiter – zählt ab 10 Individuen und Ø 1 Fähigkeit</span>'; return; }
   leaderEl.innerHTML = `🏆 <b>Spitzenreiter</b>
     ${swatch(l.hue)}Art ${l.id}
     · Ø <b>${fmtSkills(l.skills)}</b> Fähigkeiten · <b>${l.members}</b> Individuen${l.culture > 0.5 ? ' · 🧠 Kultur' : ''}
     · <span class="skills">${icons(l.common) || '–'}</span>
-    · führt seit ${l.since} <span class="muted">(${world.tick - l.since} Schritte)</span>`;
+    · führt seit ${l.since} <span class="muted">(${snap!.tick - l.since} Schritte)</span>`;
 }
 
 /** Top 10 lebende Arten: Natur → nach Ø Fähigkeiten, Schiedsrichter → nach dem gewählten Kriterium. */
 function renderTop(): void {
-  const census = world.census[world.census.length - 1];
+  const census = view.census[view.census.length - 1];
   const judge = cfg.mode === 'schiedsrichter';
   const key = (s: SpeciesStat) => (judge ? s.score : s.skills);
   const all = census?.species ?? [];
   const big = all.filter((s) => s.members >= LEADER_MIN_MEMBERS);
   const list = [...(big.length ? big : all)].sort((a, b) => key(b) - key(a) || b.members - a.members).slice(0, 10);
-  if (picked !== null && !census?.species.some((s) => s.id === picked)) picked = null; // ausgestorben
+  if (picked !== null && !census?.species.some((s) => s.id === picked)) { picked = null; send({ type: 'pick', id: null }); } // ausgestorben
   topHint.textContent = judge
     ? `Sortiert nach „${FITNESS_LABELS[cfg.fitness]}“ (Ø der Art), nur Arten ab ${LEADER_MIN_MEMBERS} Individuen. Klick auf eine Zeile hebt die Art in der Welt hervor.`
     : `Sortiert nach Ø Fähigkeiten (wie der Spitzenreiter), nur Arten ab ${LEADER_MIN_MEMBERS} Individuen. Individuen: geschätzte Zahl der Lebewesen dieser Art. Klick auf eine Zeile hebt die Art in der Welt hervor, nochmal Klick hebt es auf.`;
@@ -247,7 +285,7 @@ function renderTop(): void {
     ${judge ? '<th class="num">Ø Kriterium</th>' : ''}<th class="num">Ø Fähigk.</th><th>Fähigkeiten (Mehrheit)</th>
     <th>Ernährung</th>${judge ? '' : '<th>Kultur</th>'}<th class="num">lebt seit</th></tr></thead>`;
   const rows = list.map((s, i) => `<tr data-id="${s.id}" class="${s.id === picked ? 'picked' : ''}">
-    <td>${!judge && s.id === world.leader?.id ? '🏆' : i + 1}</td>
+    <td>${!judge && s.id === snap!.leader?.id ? '🏆' : i + 1}</td>
     <td>${swatch(s.hue)}Art ${s.id}</td>
     <td class="num">${s.members}</td>
     ${judge ? `<td class="num">${s.score.toFixed(1)}</td>` : ''}
@@ -255,12 +293,12 @@ function renderTop(): void {
     <td class="skills">${icons(s.common) || '–'}</td>
     <td>${s.predator ? '🥩 Räuber' : '🌿 Pflanzen'}</td>
     ${judge ? '' : `<td>${s.culture > 0 ? `🧠 ${Math.round(s.culture * 100)} %` : '–'}</td>`}
-    <td class="num">${s.born} <span class="muted">(${world.tick - s.born})</span></td></tr>`);
+    <td class="num">${s.born} <span class="muted">(${snap!.tick - s.born})</span></td></tr>`);
   topTable.innerHTML = head + `<tbody>${padRows(rows, 9, 'noch keine Arten gezählt')}</tbody>`;
 }
 
 function renderExtinct(): void {
-  const list = world.extinct.slice(-10).reverse();
+  const list = view.extinct.slice(-10).reverse();
   const head = `<thead><tr><th>Art</th><th>lebte</th><th class="num">Höchststand</th><th class="num">beste Ø Fähigk.</th>
     <th>Fähigkeiten (damals)</th><th>Ende</th></tr></thead>`;
   const rows = list.map((e) => `<tr>
@@ -288,13 +326,15 @@ topTable.addEventListener('click', (ev) => {
   if (!tr) return;
   const id = Number(tr.dataset.id);
   picked = picked === id ? null : id;
+  send({ type: 'pick', id: picked });
   renderTop();
 });
 
 function renderReport(): void {
-  if (world.crisisReports.length === shownReports) return;
-  shownReports = world.crisisReports.length;
-  const r = world.crisisReports[shownReports - 1];
+  if (view.reports.length === shownReports) return;
+  shownReports = view.reports.length;
+  if (!shownReports) return;
+  const r = view.reports[shownReports - 1];
   const def = CRISES[r.kind];
   const rows = r.buckets
     .filter((b) => b.before > 0 || b.after > 0)
@@ -313,37 +353,38 @@ function renderReport(): void {
 }
 
 function renderCharts(): void {
-  const samples = world.samples;
+  const samples = view.samples;
   drawChart(chartPop, samples, [
     { color: css('--pop'), value: (s) => s.population * (1 - s.cultureShare) - s.predators },
     { color: css('--pred'), value: (s) => s.predators },
     { color: css('--cult'), value: (s) => s.population * s.cultureShare },
     { color: css('--spec'), value: (s) => s.species, axis: 'right' },
-  ], world.events);
-  drawSpeciesChart(chartSpecies, world.census, world.events, world.leader?.id ?? null, picked);
+  ], view.events);
+  drawSpeciesChart(chartSpecies, view.census, view.events, snap!.leader?.id ?? null, picked);
   drawChart(chartTraits, samples, [
     { color: css('--size'), value: (s) => (s.avgSize - LIMITS.size[0]) / (LIMITS.size[1] - LIMITS.size[0]) },
     { color: css('--speed'), value: (s) => (s.avgSpeed - LIMITS.speed[0]) / (LIMITS.speed[1] - LIMITS.speed[0]) },
     { color: css('--sense'), value: (s) => s.avgSense },
     { color: css('--diet'), value: (s) => s.avgDiet },
     { color: css('--soil'), value: (s) => s.fertility },
-  ], world.events, 1);
+  ], view.events, 1);
 }
 
 function loop(): void {
-  if (running) {
-    const n = Number(speedIn.value);
-    for (let i = 0; i < n; i++) { scheduled(); world.step(); }
+  // Nächste Rechenrunde anfordern (angehalten: 0 Schritte – nur für Auswahl/Hervorhebung)
+  if (!pending) {
+    send({ type: 'run', steps: running ? Number(speedIn.value) : 0 });
+    pending = true;
   }
-  const rep = picked !== null ? world.speciesRep(picked) : null;
-  drawWorld(worldCanvas, world, selected, Number(zoomIn.value), rep ? (o) => genomeDistance(o.genome, rep) < 0.3 : null);
+  if (!snap) { requestAnimationFrame(loop); return; }
+  drawWorld(worldCanvas, cfg, snap, Number(zoomIn.value), picked !== null);
   if (frame++ % 10 === 0) {
     renderStats();
     renderCharts();
     renderReport();
-    if (selected) renderSelected();
-    const last = world.census[world.census.length - 1];
-    const key = `${world.census.length}:${last?.tick}:${world.extinct.length}`;
+    renderSelected();
+    const last = view.census[view.census.length - 1];
+    const key = `${view.census.length}:${last?.tick}:${view.extinct.length}`;
     if (key !== shownCensus) {
       shownCensus = key;
       renderLeader();
@@ -359,5 +400,4 @@ if (params.has('anschwung')) boostIn.value = params.get('anschwung')!;
 updateOutputs();
 renderLegend();
 restart();
-prerun();
 requestAnimationFrame(loop);

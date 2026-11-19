@@ -43,7 +43,8 @@ URL-Parameter: `?seed=42`, `?vorlauf=4000` (Schritte vorrechnen), `?augen=2000` 
 
 - `src/core/` – Simulation ohne Browser-Abhängigkeit (deterministisch per Seed, testbar), aufgeteilt in
   `behavior` (Wahrnehmung, Bewegung, Fressen), `culture`, `selection`, `census`, `crisis`, `food`, `traits`; `world` hält den Zustand
-- `src/ui/` – Canvas-Darstellung und Bedienung
+- `src/sim/` – die Simulation läuft in einem **Web Worker** (`worker.ts`); `host.ts` verwaltet die Welt und baut Momentaufnahmen, `protocol.ts` beschreibt die Nachrichten. So bleibt die Bedienung flüssig.
+- `src/ui/` – Canvas-Darstellung und Bedienung (zeichnet nur, was der Worker schickt)
 - `test/` – Regeltests, Golden Master (bitgenauer Fingerabdruck – reines Umstrukturieren darf ihn nicht ändern), `test/szenarien/` Gesamtverhalten
 - `docs/modell.md` – **Modellbeschreibung**: alle Regeln, Parameter, Grenzen und Quellen
 
