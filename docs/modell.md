@@ -9,9 +9,13 @@ Niemand programmiert, was sich durchsetzt. Lebewesen haben vererbte Merkmale, ei
 vielleicht Fähigkeiten. Mutation erzeugt Varianten, und die Umwelt sortiert aus, ganz ohne Bewertung von außen.
 Der **Schiedsrichter-Modus** ist das Gegenstück dazu: Dort entscheidet ein willkürliches Kriterium, wer sich fortpflanzt.
 
-Der Kern (`src/core`) ist **deterministisch**: Gleicher Seed ergibt exakt denselben Verlauf. Alle Zufallszahlen
-kommen aus einem einzigen Zufallsgenerator (`rng.ts`). Deshalb ist die *Reihenfolge* der Aufrufe Teil des
-Verhaltens.
+Der Kern (`src/core`) ist **deterministisch**: Gleicher Seed ergibt exakt denselben Verlauf, und zwar **in jedem
+Browser**. Alle Zufallszahlen kommen aus einem einzigen Zufallsgenerator (`rng.ts`). Deshalb ist die
+*Reihenfolge* der Aufrufe Teil des Verhaltens. Funktionen wie `Math.sin`, `Math.cos` oder `Math.pow` dürfen je
+JavaScript-Engine im letzten Bit abweichen. Node und Chromium tun das nachweislich, und in einer chaotischen
+Simulation wird daraus ein anderer Verlauf. Der Kern nutzt deshalb eigene Funktionen aus `dmath.ts`, die nur
+aus exakt gerundeten Grundrechenarten bestehen. Geprüft: Node und Chromium sind über 3000 Schritte bitgleich.
+Ein Test (`test/plattform.test.ts`) verhindert Rückfälle.
 
 ## Ablauf eines Zeitschritts (`world.ts → step`)
 

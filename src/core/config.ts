@@ -3,6 +3,7 @@
  * schiedsrichter: Ein von außen festgelegtes Kriterium entscheidet nach jeder Generation,
  *                 wer sich fortpflanzen darf – egal, ob das fürs Überleben sinnvoll ist.
  */
+import { pow as dpow } from './dmath.ts';
 export type Mode = 'natur' | 'schiedsrichter';
 
 /** Kriterien des Schiedsrichters. */
@@ -236,7 +237,7 @@ export function defaultConfig(): SimConfig {
 
 /** Kick-Wahrscheinlichkeit pro Tick und berechtigtem Lebewesen (logarithmische Skala). */
 export function kickRate(boost: number): number {
-  return boost <= 0 ? 0 : 1e-6 * Math.pow(10, boost / 25);
+  return boost <= 0 ? 0 : 1e-6 * dpow(10, boost / 25);
 }
 
 /** Die frühere Welt ohne Gelände (1200 × 800, max. 900) – für Vergleiche und den Golden Master. */

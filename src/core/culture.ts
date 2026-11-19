@@ -12,6 +12,7 @@ import { EPOCHS, EXTRA_MIN, SKILL, SKILLS, available, epochFor, has, nothingLear
 import { kickReady, skillCount, skillsOf } from './traits.ts';
 import { TIPPING_SHARE, TIPPING_SKILLS, type Organism } from './types.ts';
 import type { World } from './world.ts';
+import { pow as dpow } from './dmath.ts';
 
 /** Zustand einer Kulturlinie. */
 export interface CultureLine {
@@ -158,7 +159,7 @@ export class CultureSystem {
     }
     if (options.length) {
       const pick = options[w.rng.int(options.length)];
-      if (teacher || w.rng.chance(1 / Math.pow(Math.max(1, SKILLS[pick].epoch), 1.5))) o.learned.mask |= 1 << pick;
+      if (teacher || w.rng.chance(1 / dpow(Math.max(1, SKILLS[pick].epoch), 1.5))) o.learned.mask |= 1 << pick;
     } else if (lineCarriers >= EXTRA_MIN && available(mine, false).length === 0 && (!teacher || teacher.learned.extra > o.learned.extra)) {
       o.learned.extra++;
     }

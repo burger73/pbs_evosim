@@ -11,6 +11,7 @@ import { SKILL, extraBonus, has, popcount, upkeep } from './skills.ts';
 import { MOUNTAIN, WATER } from './terrain.ts';
 import { isHunter, isPredator, maxEnergy, radius, senseRadius, skillsOf } from './traits.ts';
 import type { World } from './world.ts';
+import { cos as dcos, log2 as dlog2, sin as dsin } from './dmath.ts';
 
 const input = new Float64Array(N_IN);
 const output = new Float64Array(2);
@@ -85,7 +86,7 @@ export function countGroups(w: World): void {
  */
 function drift(w: World, o: World['organisms'][number]): boolean {
   const cfg = w.cfg, t = w.terrain, W = cfg.width, H = cfg.height;
-  const dx = Math.cos(o.heading), dy = Math.sin(o.heading);
+  const dx = dcos(o.heading), dy = dsin(o.heading);
   const stepLen = cfg.terrainCell / 2;
   let wasWater = false;
   for (let d = stepLen; d <= cfg.driftRange; d += stepLen) {
@@ -127,8 +128,8 @@ export function stepOrganisms(w: World): void {
     const digger = has(sk, SKILL.graben);
     const r = radius(cfg, o);
     const R = senseRadius(cfg, o);
-    const cos = Math.cos(o.heading);
-    const sin = Math.sin(o.heading);
+    const cos = dcos(o.heading);
+    const sin = dsin(o.heading);
 
     // --- Wahrnehmung -------------------------------------------------
     const R2 = R * R;
@@ -182,14 +183,14 @@ export function stepOrganisms(w: World): void {
     const v = output[1] * o.genome.speed * cfg.speedScale;
     let inMountain = false;
     if (!terrainOn) {
-      o.x = (o.x + Math.cos(o.heading) * v + W) % W;
-      o.y = (o.y + Math.sin(o.heading) * v + H) % H;
+      o.x = (o.x + dcos(o.heading) * v + W) % W;
+      o.y = (o.y + dsin(o.heading) * v + H) % H;
       o.travelled += v;
     } else {
       inMountain = terrain.typeAt(o.x, o.y) === MOUNTAIN;
       const step = inMountain ? v * cfg.mountainSlow : v; // im Gebirge langsamer (die Anstrengung kostet trotzdem)
-      const nx = (o.x + Math.cos(o.heading) * step + W) % W;
-      const ny = (o.y + Math.sin(o.heading) * step + H) % H;
+      const nx = (o.x + dcos(o.heading) * step + W) % W;
+      const ny = (o.y + dsin(o.heading) * step + H) % H;
       if (terrain.typeAt(nx, ny) !== WATER || (skl[idx] & B_BOOT) !== 0) { // mit Boot geht es übers Wasser
         o.x = nx; o.y = ny; o.travelled += step;
       } else if (!(rng.chance(cfg.driftChance) && drift(w, o))) {
@@ -221,7 +222,7 @@ export function stepOrganisms(w: World): void {
     }
     const move = cfg.moveCost * area * v * v * (has(sk, SKILL.maschinen) ? 0.5 : 1);
     // Komplexitätskosten: einfache Kultur (bis 4 erlernte Fähigkeiten) ist billig
-    const complexity = cfg.complexityCost * (Math.max(0, popcount(o.learned.mask) - 4) + 2 * Math.log2(1 + o.learned.extra));
+    const complexity = cfg.complexityCost * (Math.max(0, popcount(o.learned.mask) - 4) + 2 * dlog2(1 + o.learned.extra));
     o.energy -= base + move + cfg.senseCost * (R / cfg.maxSense) + cold
       + upkeep(o.genome.skills) + (o.genome.culture ? cfg.cultureCost : 0) + complexity;
 

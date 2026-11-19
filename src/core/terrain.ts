@@ -11,6 +11,8 @@
  */
 import type { SimConfig } from './config.ts';
 import { Rng } from './rng.ts';
+/** Abstand nur mit exakt gerundeten Operationen (Math.hypot darf je Engine abweichen). */
+const dist = (dx: number, dy: number) => Math.sqrt(dx * dx + dy * dy);
 
 export const LAND = 0, WATER = 1, MOUNTAIN = 2;
 
@@ -93,13 +95,13 @@ export class Terrain {
     const centers: [number, number][] = [];
     for (let tries = 0; centers.length < k && tries < 5000; tries++) {
       const x = rng.range(0, W), y = rng.range(0, H);
-      if (centers.every(([cx, cy]) => Math.hypot(wrap(x - cx, W), wrap(y - cy, H)) >= minDist)) centers.push([x, y]);
+      if (centers.every(([cx, cy]) => dist(wrap(x - cx, W), wrap(y - cy, H)) >= minDist)) centers.push([x, y]);
     }
 
     // Rauschen: Verwirbelung (2 Achsen), Küstenrauheit, Gebirgsgrate
     const lattice = (scale: number) => [Math.max(2, Math.round(W / scale)), Math.max(2, Math.round(H / scale))] as const;
     const layers = (scale: number, oct: number) => Array.from({ length: oct }, (_, i) => {
-      const [nx, ny] = lattice(scale / 2 ** i);
+      const [nx, ny] = lattice(scale / (1 << i));
       return new Noise(rng, nx, ny);
     });
     const warpX = layers(400, 3), warpY = layers(400, 3), coast = layers(150, 2), ridge = layers(300, 3);
@@ -121,7 +123,7 @@ export class Terrain {
         const py = y + (fbm(warpY, u4, v4) - 0.5) * cfg.terrainWarp;
         let d1 = Infinity, d2 = Infinity, best = 0;
         for (let j = 0; j < centers.length; j++) {
-          const d = Math.hypot(wrap(px - centers[j][0], W), wrap(py - centers[j][1], H));
+          const d = dist(wrap(px - centers[j][0], W), wrap(py - centers[j][1], H));
           if (d < d1) { d2 = d1; d1 = d; best = j; } else if (d < d2) d2 = d;
         }
         // 3. Meerenge an der Grenze (halber Abstandsunterschied ≈ Abstand zur Grenze), mit rauer Küste

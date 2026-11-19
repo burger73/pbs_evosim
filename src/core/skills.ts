@@ -7,6 +7,7 @@
  * entdecken, lernen, weitergeben. Gelernte Fähigkeiten kosten nichts – das ist
  * der Vorteil der Kultur.
  */
+import { exp as dexp } from './dmath.ts';
 export interface SkillDef {
   key: string;
   label: string;
@@ -124,7 +125,7 @@ export const nothingLearned = (): Learned => ({ mask: 0, extra: 0 });
 
 /** Ertragsbonus durch weitere Erfindungen: wächst mit, aber sättigend. */
 export function extraBonus(extra: number): number {
-  return 1 + 1.5 * (1 - Math.exp(-extra / 40));
+  return 1 + 1.5 * (1 - dexp(-extra / 40));
 }
 
 /** Höchste Epoche, die mit so vielen Kulturträgern möglich ist (1–4). */
