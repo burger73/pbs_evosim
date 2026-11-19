@@ -9,9 +9,13 @@ Niemand programmiert, was sich durchsetzt. Lebewesen haben vererbte Merkmale, ei
 vielleicht Fähigkeiten. Mutation erzeugt Varianten, und die Umwelt sortiert aus, ganz ohne Bewertung von außen.
 Der **Schiedsrichter-Modus** ist das Gegenstück dazu: Dort entscheidet ein willkürliches Kriterium, wer sich fortpflanzt.
 
-Der Kern (`src/core`) ist **deterministisch**: Gleicher Seed ergibt exakt denselben Verlauf. Alle Zufallszahlen
-kommen aus einem einzigen Zufallsgenerator (`rng.ts`). Deshalb ist die *Reihenfolge* der Aufrufe Teil des
-Verhaltens.
+Der Kern (`src/core`) ist **deterministisch**: Gleicher Seed ergibt exakt denselben Verlauf, und zwar **in jedem
+Browser**. Alle Zufallszahlen kommen aus einem einzigen Zufallsgenerator (`rng.ts`). Deshalb ist die
+*Reihenfolge* der Aufrufe Teil des Verhaltens. Funktionen wie `Math.sin`, `Math.cos` oder `Math.pow` dürfen je
+JavaScript-Engine im letzten Bit abweichen. Node und Chromium tun das nachweislich, und in einer chaotischen
+Simulation wird daraus ein anderer Verlauf. Der Kern nutzt deshalb eigene Funktionen aus `dmath.ts`, die nur
+aus exakt gerundeten Grundrechenarten bestehen. Geprüft: Node und Chromium sind über 3000 Schritte bitgleich.
+Ein Test (`test/plattform.test.ts`) verhindert Rückfälle.
 
 ## Ablauf eines Zeitschritts (`world.ts → step`)
 
@@ -23,6 +27,25 @@ Verhaltens.
 6. Gefressenes Futter entfernen, neues wachsen lassen
 7. Krise beenden oder zufällig beginnen (`crisis.ts`), im Schiedsrichter-Modus Generationswechsel
 8. Alle 50 Schritte Artenzählung (`census.ts`), alle 10 Schritte Statistik
+
+## Welt und Gelände (`terrain.ts`)
+
+Die Welt ist 2000 × 1340 groß, mit höchstens 2000 Lebewesen. Ränder gibt es nicht: Wer rechts hinausläuft,
+kommt links wieder herein. Für jeden Seed entsteht eine Karte mit eigenem Zufallsgenerator, sodass sie den
+Verlauf der Simulation nicht verändert:
+- **3–4 Kontinente** (Voronoi-Gebiete um zufällige Zentren, mit verwirbelten Koordinaten für natürliche
+  Küsten), getrennt durch **Meerengen** (Breite 50, raue Küsten). Tests prüfen für 8 Seeds, dass die
+  Kontinente wirklich getrennt sind und dass jeder mindestens 10 % des Landes umfasst.
+- **Wasser:** Lebewesen prallen am Ufer ab wie eine Billardkugel. Einfaches Umdrehen war fatal, weil die
+  Lebewesen dann auf ihrer eigenen, abgegrasten Spur zurückliefen und verhungerten. Sehr selten (1e-4 pro
+  Anstoßen) treibt eines übers Wasser zum nächsten Ufer (**Treibgut**, ein Gründerereignis wie bei Darwins
+  Finken). Mit 🛶 Boot geht es übers Wasser.
+- **Gebirge** (etwa 12 % des Landes, als Grate): Es ist karg, dort wächst kein Futter. In Kältekrisen ist es
+  doppelt so kalt. Eine Verlangsamung gibt es als Parameter (`mountainSlow`), sie ist aber aus: Schon 0,5–0,8
+  erstickte in Versuchen die frühe Evolution (Durchbruch in 1–4 statt 6 von 8 Seeds).
+- Futter wächst nur auf fruchtbarem Land. Kinder landen nie im Wasser.
+- `LEGACY_WORLD` ist die frühere Welt (1200 × 800, max. 900, ohne Gelände). Sie dient Vergleichen und dem
+  Golden Master.
 
 ## Lebewesen
 
@@ -49,7 +72,7 @@ außer auf andere Kulturträger.
 
 **Fortpflanzung und Tod:** Teilung ab Energie > 70 × Fläche. Eltern und Kind bekommen je 45 %, 10 % gehen verloren.
 Tod durch Hunger, Alter (2500, 🧥 Kleidung ×1,2, ⚕️ Medizin ×1,5) oder Gefressenwerden. Die Population ist auf
-900 begrenzt (siehe Grenzen). Sinkt sie unter 15, wird die Welt aus einem **Refugium** neu besiedelt,
+2000 begrenzt (siehe Grenzen). Sinkt sie unter 15, wird die Welt aus einem **Refugium** neu besiedelt,
 einer Erbgut-Stichprobe der letzten Zählungen.
 
 ## Fähigkeiten (`skills.ts`)
@@ -68,36 +91,47 @@ Gemeint ist Nischenkonstruktion: Lebewesen verändern ihre Umwelt.
 | 👁️ | Augen | volle Sichtweite statt Tastsinn |
 
 *Kulturelle* Fähigkeiten entstehen nur durch Kultur und kosten keinen Unterhalt. Sie sind auf 4 Epochen verteilt:
-🔥 Feuer, 🧥 Kleidung, ⚔️ Waffen (1) · 🛖 Hütte, 🌾 Landwirtschaft (2) · ⚕️ Medizin, 📜 Schrift, ⛏️ Metall (3) ·
+🔥 Feuer, 🧥 Kleidung, ⚔️ Waffen (1) · 🛖 Hütte, 🌾 Landwirtschaft (2) · 🛶 Boot (braucht Schrift),
+⚕️ Medizin, 📜 Schrift, ⛏️ Metall (3) ·
 🔬 Wissenschaft, ⚙️ Maschinen (4). Nach der Neuzeit folgen beliebig viele weitere Erfindungen mit
 sättigendem Ertragsbonus.
 
 ## Kultur (`culture.ts`)
 
 - **Kick** (nach Harari, „kognitive Revolution“): ein seltener Glücksfall pro Lebewesen und Schritt. Die
-  Wahrscheinlichkeit ist 10⁻⁶ · 10^(Anschwung/25), der Anschwung reicht von 0 bis 100. Der Kick trifft nur
-  Lebewesen mit mindestens 3 vererbten Fähigkeiten. Kulturfähigkeit wird vererbt.
-- **Durchsetzen braucht Artgenossen** (Henrich, „kollektives Gehirn“): Gelernt wird nur von Nachbarn mit
-  ähnlicher Farbe (Farbabstand ≤ 40), die mehr können. Die Reichweite ist 60, mit 📜 Schrift 180. Ein einzelner
+  Wahrscheinlichkeit ist 10⁻⁶ · 10^(Anschwung/25), der Anschwung reicht von 0 bis 100, Standard ist 65. Der
+  Kick trifft nur Lebewesen mit mindestens 3 vererbten Fähigkeiten. Kulturfähigkeit wird vererbt.
+- **Kulturlinien:** Jeder Kick gründet eine **Linie**, und Kinder erben deren Nummer zusammen mit der
+  Kulturfähigkeit. Verliert ein Kind die Kulturfähigkeit durch Mutation (1 %), verliert es auch Linie und
+  Wissen. **Gelernt wird nur innerhalb der eigenen Linie.** Epochen, Vergessen, weitere Erfindungen und
+  Kipppunkt zählen **pro Linie**. Getrennte Kulturen können deshalb verschieden weit kommen
+  (Diamond, „Arm und Reich“).
+- **Durchsetzen braucht Artgenossen** (Henrich, „kollektives Gehirn“): Gelernt wird nur von Nachbarn der
+  eigenen Linie, die mehr können. Die Reichweite ist 60, mit 📜 Schrift 180. Ein einzelner
   Kulturträger nimmt sein Wissen mit ins Grab.
 - **Entdecken** wird mit jeder Epoche schwerer. 🔬 Wissenschaft verdoppelt die Rate.
 - **Weitergabe an Kinder** geht mit Verlusten: Pro Fähigkeit bleibt sie mit 85 % erhalten, mit Schrift vollständig.
-- **Epochen brauchen Köpfe:** Sesshaftigkeit ab 50, Hochkultur ab 150, Neuzeit ab 300 Kulturträgern. Reicht
-  die Zahl nicht mehr, gehen Fähigkeiten dieser Epochen nach und nach verloren. Das ist der
-  **Tasmanien-Effekt** (Henrich). Achtung: Die Zahl der Kulturträger wird zurzeit **weltweit** gezählt.
+- **Epochen brauchen Köpfe:** Sesshaftigkeit ab 50, Hochkultur ab 150, Neuzeit ab 300 Kulturträgern **der
+  eigenen Linie**. Reicht die Zahl nicht mehr, gehen Fähigkeiten dieser Epochen nach und nach verloren. Das ist
+  der **Tasmanien-Effekt** (Henrich). Die Bodenfruchtbarkeit (Raubbau) gilt dagegen noch weltweit.
 - **Landwirtschaft** baut Futter an. Begrenzt ist das durch das Ackerland, also landCapacity ×
   Bodenfruchtbarkeit. Jeder Bauer senkt die Fruchtbarkeit (**Raubbau**), die sich nur langsam erholt.
   ⚙️ Maschinen verdoppeln Ernte und Raubbau.
 - **Komplexitätskosten** (nach Tainter): Jede erlernte Fähigkeit ab der fünften kostet Energie, weitere
   Erfindungen kosten logarithmisch mehr. Komplexe Kulturen sind deshalb in Krisen verwundbar.
-- **Kultur-Kipppunkt:** Er ist erreicht, wenn mindestens 10 % Kulturträger mit im Schnitt mindestens 5
-  Fähigkeiten 5 Messungen in Folge da sind. Er wird einmal gesetzt und bleibt stehen.
+- **Kultur-Kipppunkt** je Linie: Die Träger der Linie stellen mindestens 10 % der Population und haben im
+  Schnitt mindestens 5 Fähigkeiten, und das 5 Messungen in Folge. Gemeldet wird „⚡ Kultur kippt (Linie n)“.
+  „📉 Kultur erloschen“ kommt erst, wenn kein Träger mehr lebt.
+- **Ergebnis der Abstimmung** (8 Seeds, 16.000 Schritte): Mit Boot in Epoche 3 und Anschwung 65 gibt es in
+  3 von 8 Läufen zeitweise mindestens 2 gleichzeitig gekippte Kulturen auf verschiedenen Kontinenten (vorher
+  0 von 8). Am Ende setzt sich aber meist eine Linie durch. Wer zuerst Boote hat, besiedelt die anderen
+  Kontinente und gewinnt die Konkurrenz ums Futter.
 
 ## Krisen (`crisis.ts`)
 
 | Krise | Dauer | Futter | Wirkung |
 |---|---|---|---|
-| ❄️ Eiszeit | 1500 | ×0,4 | Kälte. Gemildert durch Bau, Feuer, Kleidung und Hütte |
+| ❄️ Eiszeit | 1500 | ×0,4 | Kälte, im Gebirge doppelt. Gemildert durch Bau, Feuer, Kleidung und Hütte |
 | ☀️ Dürre | 1000 | ×0,15 | Oberflächenfutter verdirbt, vergrabenes bleibt |
 | 🌋 Vulkanwinter | 800 | ×0,1 | 30 % sterben sofort, starke Kälte |
 | 🦠 Seuche | 900 | ×1 | Ansteckung bei Nähe (über Artgrenzen ×0,1), Medizin halbiert die Sterblichkeit |
@@ -114,23 +148,23 @@ gelten Arten, die einmal mindestens 30 Individuen hatten oder Spitzenreiter ware
 
 ## Bekannte Grenzen und Vereinfachungen
 
-- **Kleine Welt:** höchstens 900 Lebewesen, damit es im Browser flüssig läuft. Zufallsdrift und Aussterben
-  wirken dadurch stark. Das ist teils gewollt, aber für Einzeller unrealistisch.
-- **Eine Weltkultur:** Nach dem Kipppunkt bleibt in Versuchen immer genau eine Kulturlinie übrig. Alles ohne
-  Kultur stirbt innerhalb von etwa 1000 Schritten aus, weil Waffen alles jagen. Die 10–20 „Arten mit Kultur“
-  in der Tabelle sind Völker einer Linie. Kultur gegen Kultur (Konflikt, Handel) gibt es nicht.
-- **Keine Geografie:** Die Welt ist ein offener Ring ohne Barrieren.
-- Geplant ist ein großer Umbau: größere Welt, Kontinente mit Wasser und Gebirge, Kulturlinien mit eigenen
-  Epochen und 🛶 Boot. Siehe die Etappen im Projektplan.
+- **Kleine Welt:** höchstens 2000 Lebewesen, damit es im Browser flüssig läuft. Ein Schritt braucht dann
+  etwa 6–11 ms. Zufallsdrift und Aussterben wirken dadurch stark. Das ist teils gewollt, aber für Einzeller
+  unrealistisch.
+- **Parallelkulturen sind eine Phase:** Wer zuerst Boote hat, setzt sich meist durch. Alles ohne Kultur stirbt
+  nach dem Kipppunkt aus, weil Waffen alles jagen. Was beim **Kontakt zweier Kulturen** passiert (Handel,
+  Konflikt, Übernahme von Wissen), ist bewusst noch nicht modelliert. Heute konkurrieren sie nur ums Futter.
 
 ## Qualitätssicherung
 
 - `npm test`: Regeltests (`test/core.test.ts`), Worker-Schicht (`test/host.test.ts`: rechnet bitgenau wie die Welt direkt, Listen lückenlos) und **Golden Master** (`test/golden.test.ts`). Feste Szenarien
-  liefern einen bitgenauen Fingerabdruck. Reines Umstrukturieren darf ihn nicht ändern. Bei absichtlicher
+  liefern einen bitgenauen Fingerabdruck, auch für die frühere Welt ohne Gelände. Reines Umstrukturieren
+  darf ihn nicht ändern. Bei absichtlicher
   Verhaltensänderung wird er mit `npx vitest run -u test/golden.test.ts` erneuert und im Commit begründet.
 - `npm run test:szenarien`: Gesamtverhalten über 5 Seeds (etwa 2,5 Minuten). Geprüft wird: Das Leben stirbt
-  nicht aus, es entsteht Vielfalt, Kultur kippt in mindestens 3 von 5 Läufen und nie sofort, die Welt bricht
-  danach nicht zusammen, Fähigkeiten helfen in der Eiszeit.
+  nicht aus, es entsteht Vielfalt, Kultur kippt in mindestens 3 von 5 Läufen und nie sofort, Parallelkulturen
+  auf getrennten Kontinenten kommen vor, die Welt bricht danach nicht zusammen, Fähigkeiten helfen in der
+  Eiszeit.
 - `node scripts/leistung.ts [max] [breite] [höhe]`: Millisekunden pro Schritt bei voller Population.
 - `node scripts/headless.ts …`: Verlauf ohne Oberfläche, zum Abstimmen von Parametern.
 
@@ -138,5 +172,5 @@ gelten Arten, die einmal mindestens 30 Individuen hatten oder Spitzenreiter ware
 
 Joseph Henrich, *The Secret of Our Success* (kollektives Gehirn, Tasmanien-Effekt) · Yuval Noah Harari,
 *Eine kurze Geschichte der Menschheit* (kognitive Revolution) · Joseph Tainter, *The Collapse of Complex
-Societies* (Komplexitätskosten) · Jared Diamond, *Arm und Reich* (Geografie, geplant) · Andrew Parker,
+Societies* (Komplexitätskosten) · Jared Diamond, *Arm und Reich* (Geografie, Kulturen verschieden weit) · Andrew Parker,
 *In the Blink of an Eye* (Augen und Wettrüsten) · Nischenkonstruktion (Odling-Smee, Laland, Feldman).

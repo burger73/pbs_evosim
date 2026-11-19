@@ -22,6 +22,8 @@
   --cult: #c9a000;
   --rest: #8a8f94;
   --share: #2f6fdf;
+  --water: #cfe2f3;
+  --mountain: #d8cfc0;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -49,6 +51,8 @@
     --cult: #f2c94c;
     --rest: #8a8f94;
     --share: #6d9cf0;
+    --water: #18283a;
+    --mountain: #2e2a25;
     color-scheme: dark;
   }
 }
@@ -74,6 +78,8 @@ header p { margin: 0; color: var(--muted); }
 .key.k-sick { box-shadow: 0 0 0 2px var(--sick); }
 .key.k-food, .key.k-buried { width: 6px; height: 6px; border-radius: 0; vertical-align: 1px; background: var(--food); }
 .key.k-buried { background: var(--buried); }
+.key.k-water, .key.k-mountain { border-radius: 3px; width: 16px; background: var(--water); border: 1px solid var(--border); }
+.key.k-mountain { background: var(--mountain); }
 body.embed header { display: none; }
 
 main {

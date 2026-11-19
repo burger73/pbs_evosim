@@ -16,6 +16,7 @@
  *   0 Drehung (−1..1)
  *   1 Schub (0..1)
  */
+import { exp, tanh } from './dmath.ts';
 export const N_IN = 8;
 export const N_HID = 6;
 export const N_OUT = 2;
@@ -28,7 +29,7 @@ export function think(w: Float32Array, input: Float64Array, out: Float64Array): 
   for (let h = 0; h < N_HID; h++) {
     let s = 0;
     for (let i = 0; i < N_IN; i++) s += w[k++] * input[i];
-    hidden[h] = Math.tanh(s);
+    hidden[h] = tanh(s);
   }
   let s0 = 0;
   let s1 = 0;
@@ -36,6 +37,6 @@ export function think(w: Float32Array, input: Float64Array, out: Float64Array): 
     s0 += w[k++] * hidden[h];
     s1 += w[k++] * hidden[h];
   }
-  out[0] = Math.tanh(s0);
-  out[1] = 1 / (1 + Math.exp(-s1));
+  out[0] = tanh(s0);
+  out[1] = 1 / (1 + exp(-s1));
 }

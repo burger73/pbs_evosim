@@ -171,6 +171,7 @@ export class SimHost {
       steps,
       ms,
       reset,
+      terrain: reset && w.cfg.terrain ? { cols: w.terrain.cols, rows: w.terrain.rows, cell: w.terrain.cell, types: w.terrain.types.slice() } : null,
     };
   }
 }

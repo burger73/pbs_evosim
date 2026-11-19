@@ -8,8 +8,10 @@ import { hueDistance } from './genome.ts';
 import { wrapDelta } from './grid.ts';
 import { LIMITS } from './genome.ts';
 import { SKILL, extraBonus, has, popcount, upkeep } from './skills.ts';
+import { MOUNTAIN, WATER } from './terrain.ts';
 import { isHunter, isPredator, maxEnergy, radius, senseRadius, skillsOf } from './traits.ts';
 import type { World } from './world.ts';
+import { cos as dcos, log2 as dlog2, sin as dsin } from './dmath.ts';
 
 const input = new Float64Array(N_IN);
 const output = new Float64Array(2);
@@ -26,7 +28,7 @@ let cult = new Uint8Array(0);
 let grp = new Int32Array(0);
 
 const B_WAFFEN = 1 << SKILL.waffen, B_HUETTE = 1 << SKILL.huette, B_METALL = 1 << SKILL.metall;
-const B_GRUPPE = 1 << SKILL.gruppe, B_BAU = 1 << SKILL.bau;
+const B_GRUPPE = 1 << SKILL.gruppe, B_BAU = 1 << SKILL.bau, B_BOOT = 1 << SKILL.boot;
 
 /** Wie traits.canEat (Natur-Modus), aber auf den vorberechneten Werten. Muss exakt gleich rechnen! */
 function canEatI(a: number, b: number, predatorSizeRatio: number): boolean {
@@ -78,6 +80,28 @@ export function countGroups(w: World): void {
   }
 }
 
+/**
+ * Treibgut: Das Lebewesen wird in Blickrichtung über das Wasser getragen und landet am nächsten Ufer.
+ * Erreicht es so einen anderen Kontinent, ist das ein Gründerereignis (wie Darwins Finken).
+ */
+function drift(w: World, o: World['organisms'][number]): boolean {
+  const cfg = w.cfg, t = w.terrain, W = cfg.width, H = cfg.height;
+  const dx = dcos(o.heading), dy = dsin(o.heading);
+  const stepLen = cfg.terrainCell / 2;
+  let wasWater = false;
+  for (let d = stepLen; d <= cfg.driftRange; d += stepLen) {
+    const x = (o.x + dx * d + W * 4) % W, y = (o.y + dy * d + H * 4) % H;
+    const type = t.typeAt(x, y);
+    if (type === WATER) { wasWater = true; continue; }
+    if (!wasWater) continue;
+    const from = t.regionAt(o.x, o.y), to = t.regionAt(x, y);
+    o.x = x; o.y = y;
+    if (from !== to) w.addEvent('🌊 Treibgut');
+    return true;
+  }
+  return false;
+}
+
 export function stepOrganisms(w: World): void {
   const cfg = w.cfg;
   const rng = w.rng;
@@ -86,6 +110,7 @@ export function stepOrganisms(w: World): void {
   const W = cfg.width;
   const H = cfg.height;
   const crisisDef = w.crisis ? CRISES[w.crisis.kind] : null;
+  const terrain = w.terrain, terrainOn = cfg.terrain;
   const natur = cfg.mode === 'natur';
   const psr = cfg.predatorSizeRatio;
   // Andere haben sich seit dem Rasteraufbau schon bewegt (höchstens maxMove) – Zellen nur mit diesem Puffer auslassen
@@ -103,8 +128,8 @@ export function stepOrganisms(w: World): void {
     const digger = has(sk, SKILL.graben);
     const r = radius(cfg, o);
     const R = senseRadius(cfg, o);
-    const cos = Math.cos(o.heading);
-    const sin = Math.sin(o.heading);
+    const cos = dcos(o.heading);
+    const sin = dsin(o.heading);
 
     // --- Wahrnehmung -------------------------------------------------
     const R2 = R * R;
@@ -156,9 +181,27 @@ export function stepOrganisms(w: World): void {
     think(o.genome.brain, input, output);
     o.heading += output[0] * cfg.maxTurn;
     const v = output[1] * o.genome.speed * cfg.speedScale;
-    o.x = (o.x + Math.cos(o.heading) * v + W) % W;
-    o.y = (o.y + Math.sin(o.heading) * v + H) % H;
-    o.travelled += v;
+    let inMountain = false;
+    if (!terrainOn) {
+      o.x = (o.x + dcos(o.heading) * v + W) % W;
+      o.y = (o.y + dsin(o.heading) * v + H) % H;
+      o.travelled += v;
+    } else {
+      inMountain = terrain.typeAt(o.x, o.y) === MOUNTAIN;
+      const step = inMountain ? v * cfg.mountainSlow : v; // im Gebirge langsamer (die Anstrengung kostet trotzdem)
+      const nx = (o.x + dcos(o.heading) * step + W) % W;
+      const ny = (o.y + dsin(o.heading) * step + H) % H;
+      if (terrain.typeAt(nx, ny) !== WATER || (skl[idx] & B_BOOT) !== 0) { // mit Boot geht es übers Wasser
+        o.x = nx; o.y = ny; o.travelled += step;
+      } else if (!(rng.chance(cfg.driftChance) && drift(w, o))) {
+        // Am Ufer abprallen wie eine Billardkugel: die Richtung spiegeln, in der Wasser liegt.
+        // (Einfach umdrehen wäre fatal: Man liefe auf der eigenen, abgegrasten Spur zurück.)
+        const waterX = terrain.typeAt(nx, o.y) === WATER, waterY = terrain.typeAt(o.x, ny) === WATER;
+        if (waterX && !waterY) o.heading = Math.PI - o.heading;
+        else if (waterY && !waterX) o.heading = -o.heading;
+        else o.heading += Math.PI;
+      }
+    }
     o.age++;
 
     // --- Energiekosten ------------------------------------------------
@@ -167,8 +210,11 @@ export function stepOrganisms(w: World): void {
     if (has(sk, SKILL.feuer)) base *= 0.7;
     if (crisisDef && has(sk, SKILL.vorrat)) base *= 0.6;
     let cold = 0;
-    if (crisisDef && crisisDef.cold > 0) {
-      cold = crisisDef.cold * cfg.coldCost * area;
+    // Im Gebirge verstärkt sich die Kälte einer Krise (mountainCold = Aufschlag in Kältekrisen)
+    const crisisCold = crisisDef ? crisisDef.cold : 0;
+    const coldStrength = inMountain && crisisCold > 0 ? crisisCold * (1 + cfg.mountainCold) : crisisCold;
+    if (coldStrength > 0) {
+      cold = coldStrength * cfg.coldCost * area;
       if (has(sk, SKILL.bau)) cold *= 0.5;
       if (has(sk, SKILL.feuer)) cold *= 0.4;
       if (has(sk, SKILL.kleidung)) cold *= 0.5;
@@ -176,7 +222,7 @@ export function stepOrganisms(w: World): void {
     }
     const move = cfg.moveCost * area * v * v * (has(sk, SKILL.maschinen) ? 0.5 : 1);
     // Komplexitätskosten: einfache Kultur (bis 4 erlernte Fähigkeiten) ist billig
-    const complexity = cfg.complexityCost * (Math.max(0, popcount(o.learned.mask) - 4) + 2 * Math.log2(1 + o.learned.extra));
+    const complexity = cfg.complexityCost * (Math.max(0, popcount(o.learned.mask) - 4) + 2 * dlog2(1 + o.learned.extra));
     o.energy -= base + move + cfg.senseCost * (R / cfg.maxSense) + cold
       + upkeep(o.genome.skills) + (o.genome.culture ? cfg.cultureCost : 0) + complexity;
 

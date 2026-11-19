@@ -3,6 +3,7 @@
  * Gleicher Seed → exakt gleicher Simulationsverlauf. Wichtig für Tests und
  * für reproduzierbare Experimente („starte mit Seed 42 und schau, was passiert“).
  */
+import { cos as dcos, log as dlog, sin as dsin } from './dmath.ts';
 export class Rng {
   private state: number;
   private spareGauss: number | null = null;
@@ -41,8 +42,8 @@ export class Rng {
     let u = 0;
     while (u === 0) u = this.next();
     const v = this.next();
-    const mag = Math.sqrt(-2 * Math.log(u));
-    this.spareGauss = mag * Math.sin(2 * Math.PI * v);
-    return mag * Math.cos(2 * Math.PI * v);
+    const mag = Math.sqrt(-2 * dlog(u));
+    this.spareGauss = mag * dsin(2 * Math.PI * v);
+    return mag * dcos(2 * Math.PI * v);
   }
 }

@@ -7,6 +7,7 @@
  * entdecken, lernen, weitergeben. Gelernte Fähigkeiten kosten nichts – das ist
  * der Vorteil der Kultur.
  */
+import { exp as dexp } from './dmath.ts';
 export interface SkillDef {
   key: string;
   label: string;
@@ -50,11 +51,12 @@ export const SKILL = {
   waffen: 9,
   huette: 10,
   landwirtschaft: 11,
-  medizin: 12,
-  schrift: 13,
-  metall: 14,
-  wissenschaft: 15,
-  maschinen: 16,
+  boot: 12,
+  medizin: 13,
+  schrift: 14,
+  metall: 15,
+  wissenschaft: 16,
+  maschinen: 17,
 } as const;
 
 const S = SKILL;
@@ -72,6 +74,7 @@ export const SKILLS: SkillDef[] = [
   { key: 'waffen', label: 'Waffen', icon: '⚔️', requires: bit(S.werkzeug), genetic: false, upkeep: 0, epoch: 1, effect: 'wird nicht gefressen, jagt alles bis doppelte Größe' },
   { key: 'huette', label: 'Hütte', icon: '🛖', requires: bit(S.werkzeug) | bit(S.bau), genetic: false, upkeep: 0, epoch: 2, effect: 'sicher vor Räubern, kaum Kälte' },
   { key: 'landwirtschaft', label: 'Landwirtschaft', icon: '🌾', requires: bit(S.werkzeug) | bit(S.vorrat), genetic: false, upkeep: 0, epoch: 2, effect: 'baut selbst Futter an – laugt aber den Boden aus' },
+  { key: 'boot', label: 'Boot', icon: '🛶', requires: bit(S.schrift), genetic: false, upkeep: 0, epoch: 3, effect: 'kann Wasser überqueren – andere Kontinente erreichen' },
   { key: 'medizin', label: 'Medizin', icon: '⚕️', requires: bit(S.feuer), genetic: false, upkeep: 0, epoch: 3, effect: '+50 % Lebensdauer, halbe Seuchen-Sterblichkeit' },
   { key: 'schrift', label: 'Schrift', icon: '📜', requires: bit(S.werkzeug), genetic: false, upkeep: 0, epoch: 3, effect: 'Wissen geht beim Vererben nicht verloren' },
   { key: 'metall', label: 'Metall', icon: '⛏️', requires: bit(S.werkzeug) | bit(S.feuer), genetic: false, upkeep: 0, epoch: 3, effect: '+30 % Ertrag, Waffen jagen bis dreifache Größe' },
@@ -122,7 +125,7 @@ export const nothingLearned = (): Learned => ({ mask: 0, extra: 0 });
 
 /** Ertragsbonus durch weitere Erfindungen: wächst mit, aber sättigend. */
 export function extraBonus(extra: number): number {
-  return 1 + 1.5 * (1 - Math.exp(-extra / 40));
+  return 1 + 1.5 * (1 - dexp(-extra / 40));
 }
 
 /** Höchste Epoche, die mit so vielen Kulturträgern möglich ist (1–4). */

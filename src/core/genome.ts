@@ -21,6 +21,8 @@ export interface Genome {
   skills: number;
   /** Kulturfähig: Ergebnis des seltenen „Kicks“ – kann lernen, entdecken, weitergeben. Kostet Energie. */
   culture: boolean;
+  /** Kulturlinie: Nummer des Kicks, von dem die Kulturfähigkeit abstammt (0 = keine Kultur). */
+  line: number;
   /** Farbe als Farbwinkel 0..360 – neutrales Merkmal. */
   hue: number;
   /** Gewichte des Gehirns. */
@@ -48,6 +50,7 @@ export function primordialGenome(rng: Rng): Genome {
     diet: clamp(0.05 + Math.abs(rng.gauss()) * 0.05, ...LIMITS.diet),
     skills: 0,
     culture: false,
+    line: 0,
     hue: wrapHue(120 + rng.gauss() * 6),
     brain,
   };
@@ -76,16 +79,19 @@ export function mutate(g: Genome, rng: Rng, rate: number): Genome {
       if (rng.chance(0.15)) brain[i] += rng.gauss() * 0.35 * rate;
     }
   }
-  return {
+  const child: Genome = {
     size: m(g.size, 0.08, LIMITS.size),
     speed: m(g.speed, 0.06, LIMITS.speed),
     sense: m(g.sense, 0.04, LIMITS.sense),
     diet: m(g.diet, 0.05, LIMITS.diet),
     skills: mutateSkills(g.skills, rng, rate),
     culture: g.culture && !(rate > 0 && rng.chance(0.01 * rate)),
+    line: 0,
     hue: wrapHue(g.hue + rng.gauss() * 8 * rate),
     brain,
   };
+  child.line = child.culture ? g.line : 0; // die Linie hängt an der Kulturfähigkeit
+  return child;
 }
 
 /** Kreisabstand zweier Farbwinkel in Grad (0..180). */

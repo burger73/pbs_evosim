@@ -1,14 +1,15 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`Golden Master > Natur: Augen für alle, Dürre und Vulkan (Seed 3) 1`] = `
+exports[`Golden Master – frühere Welt ohne Gelände > Natur: Augen für alle, Dürre und Vulkan (Seed 3) 1`] = `
 {
   "avgSkills": 1.105263,
   "cultureShare": 0,
   "events": 5,
   "extinct": 9,
   "food": 47,
-  "hash": "f4cc44cf",
+  "hash": "f2cc8129",
   "leader": 25,
+  "lines": "",
   "population": 19,
   "species": 2,
   "tick": 2500,
@@ -16,34 +17,53 @@ exports[`Golden Master > Natur: Augen für alle, Dürre und Vulkan (Seed 3) 1`] 
 }
 `;
 
-exports[`Golden Master > Natur: Kultur, Eiszeit und Seuche (Seed 8) 1`] = `
+exports[`Golden Master – frühere Welt ohne Gelände > Natur: Kultur, Eiszeit und Seuche (Seed 8) 1`] = `
 {
-  "avgSkills": 14.940887,
-  "cultureShare": 0.995074,
-  "events": 12,
-  "extinct": 39,
-  "food": 47,
-  "hash": "a4604200",
-  "leader": 65,
-  "population": 203,
+  "avgSkills": 2.328205,
+  "cultureShare": 0.051282,
+  "events": 18,
+  "extinct": 42,
+  "food": 67,
+  "hash": "62152bcf",
+  "leader": 39,
+  "lines": "1:9/E1 4:1/E0",
+  "population": 195,
   "species": 9,
   "tick": 5600,
-  "tipping": 4640,
+  "tipping": null,
 }
 `;
 
-exports[`Golden Master > Schiedsrichter: „Wer am größten ist“ 1`] = `
+exports[`Golden Master – frühere Welt ohne Gelände > Schiedsrichter: „Wer am größten ist“ 1`] = `
 {
   "avgSkills": 0.02,
   "cultureShare": 0,
   "events": 0,
   "extinct": 1,
   "food": 1400,
-  "hash": "f6e6f9e2",
+  "hash": "638695ee",
   "leader": null,
+  "lines": "",
   "population": 150,
   "species": 5,
   "tick": 2000,
   "tipping": null,
+}
+`;
+
+exports[`Golden Master – neue Welt mit Kontinenten > Kontinente, Kulturlinien, Eiszeit (Seed 8) 1`] = `
+{
+  "avgSkills": 125.504,
+  "cultureShare": 0.986,
+  "events": 30,
+  "extinct": 50,
+  "food": 93,
+  "hash": "16d7be78",
+  "leader": 297,
+  "lines": "2:442/E4 25:4/E1 30:2/E0 31:6/E1 33:2/E0 36:17/E1 55:4/E1 58:1/E0 63:1/E0 65:14/E1",
+  "population": 500,
+  "species": 21,
+  "tick": 7000,
+  "tipping": 5980,
 }
 `;

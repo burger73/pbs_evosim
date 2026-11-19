@@ -22,6 +22,7 @@ import { primordialGenome, type Genome } from './genome.ts';
 import { Grid } from './grid.ts';
 import { Rng } from './rng.ts';
 import { naturalSelection, judge } from './selection.ts';
+import { Terrain } from './terrain.ts';
 import { nothingLearned } from './skills.ts';
 import * as T from './traits.ts';
 import { CENSUS_EVERY, MAX_SAMPLES, SAMPLE_EVERY, type Organism, type Sample, type SimEvent } from './types.ts';
@@ -39,6 +40,7 @@ export class World {
   events: SimEvent[] = [];
 
   // --- Teilsysteme (intern; die Oberfläche nutzt die Zugriffe weiter unten) ---
+  readonly terrain: Terrain;
   readonly food: FoodField;
   readonly orgGrid: Grid;
   readonly cultureSystem = new CultureSystem();
@@ -50,7 +52,9 @@ export class World {
     this.cfg = cfg;
     this.rng = new Rng(cfg.seed);
     this.orgGrid = new Grid(cfg.width, cfg.height, 40);
-    this.food = new FoodField(cfg, this.rng);
+    // Gelände mit eigenem Zufallsgenerator: verändert die Zufallsfolge der Simulation nicht
+    this.terrain = cfg.terrain ? Terrain.generate(cfg) : Terrain.open(cfg);
+    this.food = new FoodField(cfg, this.rng, this.terrain);
     const n = cfg.mode === 'schiedsrichter' ? cfg.judgePopulation : cfg.initialPopulation;
     for (let i = 0; i < n; i++) this.spawn(primordialGenome(this.rng));
     for (let i = 0; i < cfg.maxFood * 0.6; i++) this.food.add();
@@ -74,6 +78,8 @@ export class World {
   get epoch() { return this.cultureSystem.epoch; }
   get firstSpark() { return this.cultureSystem.firstSpark; }
   get tippingTick() { return this.cultureSystem.tippingTick; }
+  /** Lebende Kulturlinien (Stand der letzten Messung). */
+  get cultureLines() { return [...this.cultureSystem.lines.values()]; }
 
   radius(o: Organism): number { return T.radius(this.cfg, o); }
   senseRadius(o: Organism): number { return T.senseRadius(this.cfg, o); }
@@ -100,6 +106,7 @@ export class World {
   }
 
   spawn(genome: Genome, x?: number, y?: number, energy?: number, lineage = 0): Organism {
+    if (this.cfg.terrain && (x === undefined || y === undefined)) [x, y] = this.terrain.randomLand(this.rng);
     const o: Organism = {
       id: this.nextId++,
       x: x ?? this.rng.range(0, this.cfg.width),
@@ -158,6 +165,7 @@ export class World {
   // --- Statistik ---------------------------------------------------------------
 
   private record(): void {
+    this.cultureSystem.measure(this); // Kulturlinien: Epochen, Kipppunkte
     const os = this.organisms;
     const n = os.length || 1;
     let pred = 0, s = 0, v = 0, e = 0, d = 0, sk = 0, cult = 0, cultSk = 0, maxSk = 0, ready = 0, sick = 0;
@@ -192,10 +200,9 @@ export class World {
       crisis: this.crisis?.kind ?? null,
       fertility: this.fertility,
       infected: sick / n,
-      epoch: this.cultureSystem.updateEpoch(this),
+      epoch: this.cultureSystem.epoch,
     };
     this.samples.push(sample);
-    this.cultureSystem.detectTipping(this, sample);
     if (this.samples.length > MAX_SAMPLES) this.samples.splice(0, this.samples.length - MAX_SAMPLES);
   }
 }

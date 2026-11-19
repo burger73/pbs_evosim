@@ -3,6 +3,7 @@
  * schiedsrichter: Ein von außen festgelegtes Kriterium entscheidet nach jeder Generation,
  *                 wer sich fortpflanzen darf – egal, ob das fürs Überleben sinnvoll ist.
  */
+import { pow as dpow } from './dmath.ts';
 export type Mode = 'natur' | 'schiedsrichter';
 
 /** Kriterien des Schiedsrichters. */
@@ -68,6 +69,25 @@ export interface SimConfig {
 
   speedScale: number;
   maxTurn: number;
+
+  /** Gelände an: Kontinente, Wasser, Gebirge (aus = offene Welt wie früher). */
+  terrain: boolean;
+  /** Kantenlänge einer Geländezelle. */
+  terrainCell: number;
+  /** Stärke der Verwirbelung der Küstenlinien. */
+  terrainWarp: number;
+  /** Breite der Meerengen zwischen Kontinenten. */
+  channelWidth: number;
+  /** Anteil Gebirge am Land. */
+  mountainShare: number;
+  /** Bewegung im Gebirge: Faktor auf die Geschwindigkeit (1 = normal; schon 0,5–0,8 erstickt die frühe Evolution). */
+  mountainSlow: number;
+  /** Kältekrisen sind im Gebirge um diesen Anteil stärker (1 = doppelt so kalt). Gemildert durch Bau, Feuer, Kleidung, Hütte. */
+  mountainCold: number;
+  /** Treibgut: Wahrscheinlichkeit, beim Anstoßen ans Ufer übers Wasser getrieben zu werden. */
+  driftChance: number;
+  /** Treibgut: so weit kann es höchstens treiben. */
+  driftRange: number;
 
   baseCost: number;
   moveCost: number;
@@ -137,18 +157,18 @@ export interface SimConfig {
 
 export function defaultConfig(): SimConfig {
   return {
-    width: 1200,
-    height: 800,
+    width: 2000,
+    height: 1340,
     seed: 42,
     mode: 'natur',
     fitness: 'rot',
 
-    initialPopulation: 120,
+    initialPopulation: 250,
     minPopulation: 15,
-    maxPopulation: 900,
+    maxPopulation: 2000,
 
-    maxFood: 1400,
-    foodRate: 3.5,
+    maxFood: 3000,
+    foodRate: 7.5,
     oxygen: 1,
     foodEnergy: 14,
     foodRadius: 2,
@@ -160,6 +180,16 @@ export function defaultConfig(): SimConfig {
 
     speedScale: 1.6,
     maxTurn: 0.35,
+
+    terrain: true,
+    terrainCell: 20,
+    terrainWarp: 260,
+    channelWidth: 50,
+    mountainShare: 0.12,
+    mountainSlow: 1,
+    mountainCold: 1,
+    driftChance: 1e-4,
+    driftRange: 500,
 
     baseCost: 0.05,
     moveCost: 0.035,
@@ -191,7 +221,7 @@ export function defaultConfig(): SimConfig {
     clearRate: 2.5e-7,
     regenRate: 2e-4,
 
-    cultureBoost: 50,
+    cultureBoost: 65,
     kickMinSkills: 3,
     cultureCost: 0.015,
     discoveryRate: 0.004,
@@ -207,5 +237,10 @@ export function defaultConfig(): SimConfig {
 
 /** Kick-Wahrscheinlichkeit pro Tick und berechtigtem Lebewesen (logarithmische Skala). */
 export function kickRate(boost: number): number {
-  return boost <= 0 ? 0 : 1e-6 * Math.pow(10, boost / 25);
+  return boost <= 0 ? 0 : 1e-6 * dpow(10, boost / 25);
 }
+
+/** Die frühere Welt ohne Gelände (1200 × 800, max. 900) – für Vergleiche und den Golden Master. */
+export const LEGACY_WORLD: Partial<SimConfig> = {
+  width: 1200, height: 800, initialPopulation: 120, maxPopulation: 900, maxFood: 1400, foodRate: 3.5, terrain: false,
+};

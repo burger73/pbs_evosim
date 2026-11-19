@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultConfig, type SimConfig } from '../src/core/config.ts';
+import { LEGACY_WORLD, defaultConfig, type SimConfig } from '../src/core/config.ts';
 import { LIMITS, hueDistance, mutate, primordialGenome } from '../src/core/genome.ts';
 import { Grid } from '../src/core/grid.ts';
 import { Rng } from '../src/core/rng.ts';
@@ -8,7 +8,8 @@ import { GENETIC_MASK, SKILL, SKILLS, available, has, popcount } from '../src/co
 import { mutateSkills } from '../src/core/genome.ts';
 import { World } from '../src/core/world.ts';
 
-const cfg = (o: Partial<SimConfig> = {}): SimConfig => ({ ...defaultConfig(), ...o });
+// Regeltests in der offenen Welt ohne Gelände (Gelände hat eigene Tests in terrain.test.ts)
+const cfg = (o: Partial<SimConfig> = {}): SimConfig => ({ ...defaultConfig(), ...LEGACY_WORLD, ...o });
 
 describe('Rng', () => {
   it('ist mit gleichem Seed reproduzierbar', () => {

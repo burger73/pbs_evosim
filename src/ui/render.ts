@@ -16,11 +16,45 @@ export function fitCanvas(canvas: HTMLCanvasElement, worldW?: number): number {
   return worldW ? w / worldW : dpr;
 }
 
+/** Gelände einmal vorzeichnen (eine Zelle = ein Pixel, beim Zeichnen weich hochskaliert). */
+let terrainImg: HTMLCanvasElement | null = null;
+let terrainKey = '';
+export function setTerrain(t: Snapshot['terrain']): void {
+  if (!t) { terrainImg = null; return; }
+  const water = parseColor(css('--water')), mountain = parseColor(css('--mountain'));
+  const c = document.createElement('canvas');
+  c.width = t.cols; c.height = t.rows;
+  const g = c.getContext('2d')!;
+  const img = g.createImageData(t.cols, t.rows);
+  for (let i = 0; i < t.types.length; i++) {
+    const col = t.types[i] === 1 ? water : t.types[i] === 2 ? mountain : null;
+    if (!col) continue;
+    img.data.set([col[0], col[1], col[2], 255], i * 4);
+  }
+  g.putImageData(img, 0, 0);
+  terrainImg = c;
+  terrainKey = `${t.cols}x${t.rows}:${t.cell}`;
+}
+export const terrainId = () => terrainKey;
+
+function parseColor(s: string): [number, number, number] {
+  const m = s.match(/^#([0-9a-f]{6})$/i);
+  if (!m) return [128, 128, 128];
+  const n = parseInt(m[1], 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
 /** Welt zeichnen – aus der Momentaufnahme des Workers. highlight: eine Art ist ausgewählt (andere blass). */
 export function drawWorld(canvas: HTMLCanvasElement, cfg: SimConfig, snap: Snapshot, zoom = 1, highlight = false): void {
   const ctx = canvas.getContext('2d')!;
   const k = fitCanvas(canvas, cfg.width);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (terrainImg) {
+    ctx.imageSmoothingEnabled = true;
+    // Zellen ragen am Rand ggf. über die Welt hinaus (aufgerundet) – passend skalieren
+    const cell = cfg.terrainCell * k;
+    ctx.drawImage(terrainImg, 0, 0, terrainImg.width * cell, terrainImg.height * cell);
+  }
 
   if (snap.crisis) {
     ctx.fillStyle = CRISES[snap.crisis.kind].tint;
@@ -158,8 +192,8 @@ function drawEvents(ctx: CanvasRenderingContext2D, events: readonly SimEvent[], 
   for (const e of events) {
     if (e.tick < t0) continue;
     const x = xOf(e.tick);
-    // Kleine Ereignisse (Spitzenreiter-Wechsel, Funke) nur als kurzer Strich unten
-    if (e.label.startsWith('🏆') || e.label === 'Funke') {
+    // Kleine Ereignisse (Spitzenreiter-Wechsel, Treibgut, Funke) nur als kurzer Strich unten
+    if (e.label.startsWith('🏆') || e.label.startsWith('🌊') || e.label === 'Funke') {
       ctx.setLineDash([]);
       ctx.beginPath(); ctx.moveTo(x, H); ctx.lineTo(x, H - 6 * dpr); ctx.stroke();
       ctx.setLineDash([3 * dpr, 3 * dpr]);

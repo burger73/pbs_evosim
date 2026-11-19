@@ -10,7 +10,7 @@
  *   bewusst erneuert:  npx vitest run -u test/golden.test.ts  – und im Commit begründet.
  */
 import { describe, expect, it } from 'vitest';
-import { defaultConfig, type SimConfig } from '../src/core/config.ts';
+import { LEGACY_WORLD, defaultConfig, type SimConfig } from '../src/core/config.ts';
 import { World } from '../src/core/world.ts';
 
 /** FNV-1a über Zahlen (Gleitkommazahlen bitgenau). */
@@ -57,6 +57,7 @@ function fingerprint(w: World) {
     avgSkills: Number(last.avgSkills.toFixed(6)),
     cultureShare: Number(last.cultureShare.toFixed(6)),
     leader: w.leader?.id ?? null,
+    lines: w.cultureLines.map((l) => `${l.id}:${l.carriers}/E${l.epoch}`).join(' '),
     extinct: w.extinct.length,
     tipping: w.tippingTick,
     events: w.events.length,
@@ -73,23 +74,31 @@ function run(over: Partial<SimConfig>, ticks: number, actions: Record<number, (w
   return fingerprint(w);
 }
 
-describe('Golden Master', () => {
+describe('Golden Master – neue Welt mit Kontinenten', () => {
+  it('Kontinente, Kulturlinien, Eiszeit (Seed 8)', () => {
+    expect(run({ seed: 8 }, 7000, { 6500: (w) => w.startCrisis('eiszeit') })).toMatchSnapshot();
+  }, 180_000);
+});
+
+// Ohne Kultur müssen diese Fingerabdrücke über Umbauten gleich bleiben; der Kultur-Fingerabdruck wurde in Etappe 3
+// (Kulturlinien) bewusst erneuert.
+describe('Golden Master – frühere Welt ohne Gelände', () => {
   it('Natur: Kultur, Eiszeit und Seuche (Seed 8)', () => {
     // Seed 8 mit Anschwung 80 kippt bei ~4400 in die Kultur – so laufen Kultur, Epochen und Krisen mit
-    expect(run({ seed: 8, cultureBoost: 80 }, 5600, {
+    expect(run({ ...LEGACY_WORLD, seed: 8, cultureBoost: 80 }, 5600, {
       4700: (w) => w.startCrisis('eiszeit'),
       5300: (w) => w.startCrisis('seuche'),
     })).toMatchSnapshot();
   }, 120_000);
 
   it('Natur: Augen für alle, Dürre und Vulkan (Seed 3)', () => {
-    expect(run({ seed: 3, eyesUnlocked: true, mutationRate: 1.5 }, 2500, {
+    expect(run({ ...LEGACY_WORLD, seed: 3, eyesUnlocked: true, mutationRate: 1.5 }, 2500, {
       800: (w) => w.startCrisis('duerre'),
       2000: (w) => w.startCrisis('vulkan'),
     })).toMatchSnapshot();
   }, 120_000);
 
   it('Schiedsrichter: „Wer am größten ist“', () => {
-    expect(run({ seed: 5, mode: 'schiedsrichter', fitness: 'groesse' }, 2000)).toMatchSnapshot();
+    expect(run({ ...LEGACY_WORLD, seed: 5, mode: 'schiedsrichter', fitness: 'groesse' }, 2000)).toMatchSnapshot();
   }, 60_000);
 });

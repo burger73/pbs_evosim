@@ -6,7 +6,7 @@ import { SKILLS } from '../src/core/skills.ts';
 import { World } from '../src/core/world.ts';
 
 const ticks = Number(process.argv[2] ?? 12000);
-const cfg = { ...defaultConfig(), seed: Number(process.argv[3] ?? 42), cultureBoost: Number(process.argv[4] ?? 50) };
+const cfg = { ...defaultConfig(), seed: Number(process.argv[3] ?? 42), cultureBoost: Number(process.argv[4] ?? 65) };
 const eyesAt = Number(process.argv[5] ?? 0); // 0 = nie „Augen für alle“, Augen nur als Fähigkeit
 const crises = new Map((process.argv[6] ?? '').split(',').filter(Boolean).map((s) => { const [k, t] = s.split('@'); return [Number(t), k as CrisisKind]; }));
 const w = new World(cfg);

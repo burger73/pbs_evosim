@@ -76,11 +76,14 @@ export class CensusSystem {
       rec.rep = c.representative;
       used.add(rec.id);
       let skills = 0, cult = 0, pred = 0, score = 0;
+      const lineCount = new Map<number, number>(), homeCount = new Map<number, number>();
       const judge = cfg.mode === 'schiedsrichter';
       const bitCount = new Array(SKILLS.length).fill(0);
       for (const i of c.indices) {
         skills += skillCount(os[i]);
-        if (os[i].genome.culture) cult++;
+        if (os[i].genome.culture) { cult++; lineCount.set(os[i].genome.line, (lineCount.get(os[i].genome.line) ?? 0) + 1); }
+        const h = w.terrain.regionAt(os[i].x, os[i].y);
+        homeCount.set(h, (homeCount.get(h) ?? 0) + 1);
         if (isPredator(os[i])) pred++;
         if (judge) score += fitness(os[i], cfg.fitness);
         const m = skillsOf(os[i]);
@@ -98,6 +101,8 @@ export class CensusSystem {
         common,
         born: rec.born,
         score: score / c.indices.length,
+        line: lineCount.size ? [...lineCount].reduce((a, b) => (b[1] > a[1] ? b : a))[0] : 0,
+        home: homeCount.size ? [...homeCount].reduce((a, b) => (b[1] > a[1] ? b : a))[0] : -1,
       };
       stats.push(st);
       rec.peakMembers = Math.max(rec.peakMembers, st.members);

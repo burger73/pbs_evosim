@@ -34,7 +34,7 @@ npm test           # Regeltests + Golden Master (Vitest, ~30 s)
 npm run test:szenarien   # Gesamtverhalten über 5 Seeds (~3 Min.)
 npm run build      # Typprüfung + Build nach dist/
 node scripts/leistung.ts 3000 2400 1600   # ms pro Schritt bei voller Population
-node scripts/headless.ts 16000 42 50 0 eiszeit@6000,vulkan@13000   # ohne Oberfläche: Ticks, Seed, Anschwung, Augen für alle ab (0 = nie), Krisen
+node scripts/headless.ts 16000 42 65 0 eiszeit@6000,vulkan@13000   # ohne Oberfläche: Ticks, Seed, Anschwung, Augen für alle ab (0 = nie), Krisen
 ```
 
 URL-Parameter: `?seed=42`, `?vorlauf=4000` (Schritte vorrechnen), `?augen=2000` (Augen für alle ab Schritt …; sonst entstehen sie als Fähigkeit von selbst), `?eiszeit=6000` / `?duerre=…` / `?vulkan=…` (bei Schritt …), `?anschwung=0..100`, `?embed` (ohne Kopfzeile).

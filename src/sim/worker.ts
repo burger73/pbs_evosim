@@ -9,5 +9,5 @@ import type { ToWorker } from './protocol.ts';
 const host = new SimHost();
 self.onmessage = (ev: MessageEvent<ToWorker>) => {
   const snap = host.handle(ev.data);
-  if (snap) (self as unknown as DedicatedWorkerGlobalScope).postMessage(snap, [snap.orgs.buffer, snap.food.buffer]);
+  if (snap) (self as unknown as DedicatedWorkerGlobalScope).postMessage(snap, snap.terrain ? [snap.orgs.buffer, snap.food.buffer, snap.terrain.types.buffer] : [snap.orgs.buffer, snap.food.buffer]);
 };

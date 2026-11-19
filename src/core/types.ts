@@ -72,6 +72,10 @@ export interface SpeciesStat {
   born: number;
   /** Nur im Schiedsrichter-Modus: Ø Wert des gewählten Kriteriums. */
   score: number;
+  /** Kulturlinie der Mehrheit der Kulturträger dieser Art (0 = keine Kultur). */
+  line: number;
+  /** Kontinent, auf dem die meisten Mitglieder leben (−1 = unbekannt). */
+  home: number;
 }
 
 /** Eine bemerkenswerte ausgestorbene Art (Höchststand ≥ NOTABLE_MEMBERS oder einmal Spitzenreiter). */

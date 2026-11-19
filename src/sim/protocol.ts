@@ -75,4 +75,6 @@ export interface Snapshot {
   ms: number;
   /** true = Antwort auf init (Oberfläche setzt ihre Listen zurück). */
   reset: boolean;
+  /** Nur bei reset: das Gelände (LAND/WATER/MOUNTAIN je Zelle). */
+  terrain: { cols: number; rows: number; cell: number; types: Uint8Array } | null;
 }

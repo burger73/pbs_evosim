@@ -22,11 +22,11 @@ beforeAll(async () => {
   ]);
   for (const r of [...natur, ...eiszeit]) {
     console.log(`Seed ${r.seed}: Kipppunkt ${r.tipping ?? '–'}, min. Population ${r.minPopulationAb1000}, ` +
-      `max. Arten vor Kultur ${r.maxSpeciesVorKultur}, Ende ${r.verlauf.at(-1)?.population} (${(r.ms / 1000).toFixed(0)} s)`);
+      `max. Arten vor Kultur ${r.maxSpeciesVorKultur}, Parallelkulturen ${r.parallelKulturen} Schritte, Ende ${r.verlauf.at(-1)?.population} (${(r.ms / 1000).toFixed(0)} s)`);
   }
 }, 600_000);
 
-describe('Gesamtverhalten (Natur, Anschwung 50)', () => {
+describe('Gesamtverhalten (Natur, Standard: Kontinente, Anschwung 65)', () => {
   it('das Leben stirbt nie ganz aus', () => {
     for (const r of natur) expect(r.events.filter((e) => e.label.startsWith('Ausgestorben')), `Seed ${r.seed}`).toEqual([]);
   });
@@ -39,6 +39,10 @@ describe('Gesamtverhalten (Natur, Anschwung 50)', () => {
     const tipped = natur.filter((r) => r.tipping !== null);
     expect(tipped.length).toBeGreaterThanOrEqual(3);
     for (const r of tipped) expect(r.tipping!, `Seed ${r.seed}`).toBeGreaterThanOrEqual(2000);
+  });
+
+  it('auf getrennten Kontinenten entstehen zeitweise Parallelkulturen (≥ 500 Schritte in mindestens 1 von 5 Läufen)', () => {
+    expect(natur.filter((r) => r.parallelKulturen >= 500).length).toBeGreaterThanOrEqual(1);
   });
 
   it('nach dem Kipppunkt bricht die Welt nicht zusammen (Endpopulation ≥ 100)', () => {

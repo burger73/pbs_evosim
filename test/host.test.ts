@@ -6,7 +6,8 @@ import { ORG_STRIDE, O_X, O_Y, type Snapshot } from '../src/sim/protocol.ts';
 
 const noClock = () => 0; // Zeitbudget aus: jeder run rechnet alle verlangten Schritte
 
-describe('SimHost (Simulation hinter dem Worker)', () => {
+// Großzügige Zeitgrenze: die große Welt braucht unter Last (CI, parallele Tests) mehr als die 5-s-Vorgabe
+describe('SimHost (Simulation hinter dem Worker)', { timeout: 60_000 }, () => {
   it('rechnet exakt wie die Welt direkt (gleicher Seed, gleiche Schritte)', () => {
     const cfg = { ...defaultConfig(), seed: 7 };
     const host = new SimHost();
