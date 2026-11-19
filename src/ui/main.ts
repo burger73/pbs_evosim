@@ -22,6 +22,7 @@ const statsEl = $('stats');
 const cultureEl = $('cultureStatus');
 const reportEl = $('report');
 const selectedEl = $('selected');
+const selectedBody = $('selectedBody');
 const playBtn = $<HTMLButtonElement>('play');
 const fitnessSel = $<HTMLSelectElement>('fitness');
 const seedIn = $<HTMLInputElement>('seed');
@@ -178,11 +179,16 @@ slider(boostIn, (v) => ({ cultureBoost: v }), (v) => `Anschwung ${v}`);
 randomIn.addEventListener('change', () => { cfg.randomCrises = randomIn.checked; send({ type: 'set', patch: { randomCrises: randomIn.checked } }); });
 for (const b of crisisBtns) b.addEventListener('click', () => send({ type: 'crisis', kind: b.dataset.crisis as CrisisKind }));
 
+let lastPointer = 'mouse';
+worldCanvas.addEventListener('pointerdown', (ev) => { lastPointer = ev.pointerType; });
 worldCanvas.addEventListener('click', (ev) => {
   const rect = worldCanvas.getBoundingClientRect();
-  const x = ((ev.clientX - rect.left) / rect.width) * cfg.width;
-  const y = ((ev.clientY - rect.top) / rect.height) * cfg.height;
-  send({ type: 'select', x, y });
+  const scale = cfg.width / rect.width; // Welteinheiten pro Bildschirm-Pixel
+  const x = (ev.clientX - rect.left) * scale;
+  const y = (ev.clientY - rect.top) * scale;
+  // Treffer-Radius in Bildschirm-Pixeln: fingerbreit bei Berührung, kleiner mit der Maus
+  const r = Math.max(12, (lastPointer === 'touch' ? 26 : 14) * scale);
+  send({ type: 'select', x, y, r });
   if (!running) send({ type: 'run', steps: 0 }); // auch angehalten sofort anzeigen
 });
 
@@ -213,7 +219,7 @@ function renderSelected(): void {
   const o = snap?.selected;
   if (!o) { selectedEl.hidden = true; return; }
   selectedEl.hidden = false;
-  selectedEl.innerHTML = `
+  selectedBody.innerHTML = `
     <h3><span class="swatch" style="background:hsl(${o.hue} 65% 52%)"></span>
       Lebewesen #${o.id} ${o.alive ? '' : '† (gestorben)'}</h3>
     <dl>
@@ -359,6 +365,13 @@ function renderLegend(): void {
   });
   $('legend').innerHTML = parts.join('');
 }
+
+selectedEl.addEventListener('click', (ev) => {
+  if ((ev.target as HTMLElement).id !== 'closeSelected') return;
+  send({ type: 'deselect' });
+  selectedEl.hidden = true;
+  if (!running) send({ type: 'run', steps: 0 });
+});
 
 topTable.addEventListener('click', (ev) => {
   const tr = (ev.target as HTMLElement).closest('tr[data-id]') as HTMLElement | null;

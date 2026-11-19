@@ -16,7 +16,7 @@ export type ToWorker =
   | { type: 'run'; steps: number }
   | { type: 'set'; patch: Partial<SimConfig>; event?: string }
   | { type: 'crisis'; kind: CrisisKind }
-  | { type: 'select'; x: number; y: number }
+  | { type: 'select'; x: number; y: number; /** Treffer-Radius in Weltkoordinaten */ r: number }
   | { type: 'deselect' }
   | { type: 'pick'; id: number | null };
 

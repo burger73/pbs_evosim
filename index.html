@@ -41,8 +41,12 @@
     <main>
       <section class="stage">
         <canvas id="world" aria-label="Simulationswelt"></canvas>
-        <div class="paused-badge" id="pausedBadge" hidden>⏸ angehalten · Leertaste zum Weiterlaufen</div>
+        <div class="paused-badge" id="pausedBadge" hidden>⏸ angehalten<span class="no-touch"> · Leertaste zum Weiterlaufen</span></div>
         <div class="paused-badge" id="loadingBadge" hidden>⏳ Vorlauf wird gerechnet …</div>
+        <div id="selected" class="selected" hidden>
+          <button type="button" class="close" id="closeSelected" title="Schließen" aria-label="Schließen">×</button>
+          <div id="selectedBody"></div>
+        </div>
         <div class="statusbar">
           <button id="pauseQuick" type="button" class="pause-quick" title="Anhalten / weiter (Leertaste)">⏸</button>
           <div class="stats" id="stats"></div>
@@ -134,7 +138,6 @@
         </fieldset>
 
         <div id="report" class="report" hidden></div>
-        <div id="selected" class="selected" hidden></div>
       </aside>
     </main>
     <script type="module" src="/src/ui/main.ts"></script>
