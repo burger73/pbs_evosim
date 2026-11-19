@@ -18,7 +18,7 @@ und vererbtem Gehirn (winziges neuronales Netz). Niemand programmiert ihr Verhal
 - **Krisen:** ❄️ Eiszeit, ☀️ Dürre, 🌋 Vulkanwinter, 🦠 Seuche (Ansteckung über Nähe, Medizin halbiert die
   Sterblichkeit) – per Button oder zufällig. Nach einem Massenaussterben besiedeln Überlebende aus Refugien die Welt neu.
 - **Bilanz & Messlatte:** Nach jeder Krise Überleben nach Zahl der Fähigkeiten (gemessen, nicht vorausgesetzt);
-  Fähigkeiten je Art über die Zeit (logarithmisch), 🏆 Spitzenreiter, Kipppunkt-Erkennung.
+  Fähigkeiten je Art über die Zeit (logarithmisch), 🏆 Spitzenreiter, Erkennung des Kultur-Kipppunkts.
 - **Schiedsrichter:** Ein festgelegtes Kriterium entscheidet nach jeder Generation, wer sich fortpflanzt –
   z. B. „wer am rötesten ist“. Die Population wird rot, obwohl Röte fürs Überleben nichts bringt.
 
@@ -30,8 +30,10 @@ Begleitet die Blog-Artikel „Die Kambrische Explosion der Software“ und
 ```sh
 npm install
 npm run dev        # Entwicklungs-Server
-npm test           # Tests (Vitest)
+npm test           # Regeltests + Golden Master (Vitest, ~30 s)
+npm run test:szenarien   # Gesamtverhalten über 5 Seeds (~3 Min.)
 npm run build      # Typprüfung + Build nach dist/
+node scripts/leistung.ts 3000 2400 1600   # ms pro Schritt bei voller Population
 node scripts/headless.ts 16000 42 50 0 eiszeit@6000,vulkan@13000   # ohne Oberfläche: Ticks, Seed, Anschwung, Augen für alle ab (0 = nie), Krisen
 ```
 
@@ -39,9 +41,11 @@ URL-Parameter: `?seed=42`, `?vorlauf=4000` (Schritte vorrechnen), `?augen=2000` 
 
 ## Aufbau
 
-- `src/core/` – Simulation ohne Browser-Abhängigkeit (deterministisch per Seed, testbar)
+- `src/core/` – Simulation ohne Browser-Abhängigkeit (deterministisch per Seed, testbar), aufgeteilt in
+  `behavior` (Wahrnehmung, Bewegung, Fressen), `culture`, `selection`, `census`, `crisis`, `food`, `traits`; `world` hält den Zustand
 - `src/ui/` – Canvas-Darstellung und Bedienung
-- `test/` – Tests
+- `test/` – Regeltests, Golden Master (bitgenauer Fingerabdruck – reines Umstrukturieren darf ihn nicht ändern), `test/szenarien/` Gesamtverhalten
+- `docs/modell.md` – **Modellbeschreibung**: alle Regeln, Parameter, Grenzen und Quellen
 
 Live: https://burger73.github.io/pbs_evosim/
 

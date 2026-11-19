@@ -1,0 +1,49 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Golden Master > Natur: Augen für alle, Dürre und Vulkan (Seed 3) 1`] = `
+{
+  "avgSkills": 1.105263,
+  "cultureShare": 0,
+  "events": 5,
+  "extinct": 9,
+  "food": 47,
+  "hash": "f4cc44cf",
+  "leader": 25,
+  "population": 19,
+  "species": 2,
+  "tick": 2500,
+  "tipping": null,
+}
+`;
+
+exports[`Golden Master > Natur: Kultur, Eiszeit und Seuche (Seed 8) 1`] = `
+{
+  "avgSkills": 14.940887,
+  "cultureShare": 0.995074,
+  "events": 12,
+  "extinct": 39,
+  "food": 47,
+  "hash": "a4604200",
+  "leader": 65,
+  "population": 203,
+  "species": 9,
+  "tick": 5600,
+  "tipping": 4640,
+}
+`;
+
+exports[`Golden Master > Schiedsrichter: „Wer am größten ist“ 1`] = `
+{
+  "avgSkills": 0.02,
+  "cultureShare": 0,
+  "events": 0,
+  "extinct": 1,
+  "food": 1400,
+  "hash": "f6e6f9e2",
+  "leader": null,
+  "population": 150,
+  "species": 5,
+  "tick": 2000,
+  "tipping": null,
+}
+`;

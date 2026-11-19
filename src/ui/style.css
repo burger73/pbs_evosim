@@ -57,9 +57,23 @@
 html, body { margin: 0; background: var(--bg); color: var(--fg); }
 body { font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; padding: 16px; }
 
-header { max-width: 1400px; margin: 0 auto 12px; }
+/* Kopf so breit wie die Welt darunter (gleiches Raster wie main) */
+header { max-width: 1400px; margin: 0 auto 12px; display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) 340px; }
+@media (max-width: 900px) { header { grid-template-columns: minmax(0, 1fr); } }
 header h1 { margin: 0 0 4px; font-size: 1.5rem; }
-header p { margin: 0; color: var(--muted); max-width: 75ch; }
+header p { margin: 0; color: var(--muted); }
+.howto { margin-top: 6px; color: var(--muted); font-size: 0.92rem; }
+.howto summary { cursor: pointer; color: var(--accent); font-weight: 600; width: fit-content; }
+.howto ul { margin: 6px 0 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 3px; }
+.howto b { color: var(--fg); font-weight: 600; }
+.howto kbd { font: inherit; font-size: 0.85em; padding: 0 5px; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; background: var(--panel); color: var(--fg); }
+.key { display: inline-block; width: 12px; height: 12px; border-radius: 50%; vertical-align: -1px; margin-right: 4px; background: hsl(120 65% 52%); }
+.key.k-pred { background: hsl(120 65% 42%); box-shadow: inset 0 0 0 2px var(--pred); }
+.key.k-skill { background: radial-gradient(circle, rgba(255,255,255,0.95) 0 35%, hsl(120 65% 52%) 38%); }
+.key.k-cult { box-shadow: 0 0 0 2px var(--cult); }
+.key.k-sick { box-shadow: 0 0 0 2px var(--sick); }
+.key.k-food, .key.k-buried { width: 6px; height: 6px; border-radius: 0; vertical-align: 1px; background: var(--food); }
+.key.k-buried { background: var(--buried); }
 body.embed header { display: none; }
 
 main {
@@ -185,7 +199,7 @@ table.species tbody tr:last-child td { border-bottom: none; }
 #topTable tbody tr { cursor: pointer; }
 #topTable tbody tr:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
 #topTable tbody tr.picked { background: color-mix(in srgb, var(--accent) 18%, transparent); }
-table.species .empty { color: var(--muted); text-align: center; padding: 10px; }
+table.species .empty { color: var(--muted); text-align: center; }
 .swatch { width: 12px; height: 12px; border-radius: 50%; display: inline-block; vertical-align: -1px; margin-right: 4px; }
 
 .legend { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 4px 16px; margin: 0; font-size: 0.88rem; }
@@ -195,3 +209,16 @@ table.species .empty { color: var(--muted); text-align: center; padding: 10px; }
 .legend dd b { color: var(--fg); font-weight: 600; }
 .legend .group { grid-column: 1 / -1; font-weight: 600; color: var(--fg); margin-top: 4px; font-size: 0.85rem; }
 table.species .muted { color: var(--muted); font-size: 0.85em; }
+
+/* Feste Höhen, damit beim Aktualisieren nichts springt */
+table.species td { height: 31px; }
+table.species tr.filler td { border-bottom-color: transparent; }
+#topTable tbody tr.filler { cursor: default; }
+#topTable tbody tr.filler:hover { background: none; }
+.leader { min-height: 64px; }
+#cultureStatus { min-height: 1.45em; }
+@media (max-width: 900px) {
+  .leader { min-height: 100px; }
+  .statusbar { min-height: 105px; align-items: flex-start; }
+  #cultureStatus { min-height: 77px; }
+}

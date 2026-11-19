@@ -1,4 +1,4 @@
-# CI: bei jedem Push und Pull Request typprüfen, testen, bauen.
+# CI: bei jedem Push und Pull Request typprüfen, testen, bauen; Szenario-Tests (Gesamtverhalten) parallel.
 # CD: Stand auf main wird als GitHub Pages veröffentlicht (burger73.github.io/pbs_evosim/).
 name: CI
 
@@ -37,6 +37,20 @@ jobs:
         uses: actions/upload-pages-artifact@v5
         with:
           path: ./dist
+
+  szenarien:
+    # Gesamtverhalten über mehrere Seeds (~3 Min.). Läuft parallel, blockiert das Veröffentlichen nicht –
+    # ein Fehlschlag zeigt aber, dass die Balance der Simulation gekippt ist.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Szenario-Tests
+        run: npm run test:szenarien
 
   deploy:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'

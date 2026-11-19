@@ -123,7 +123,7 @@ describe('Genetische Fähigkeiten', () => {
   it('nur Gräber kommen an vergrabenes Futter', () => {
     for (const [skills, expectEaten] of [[0, false], [G(SKILL.graben), true]] as const) {
       const w = new World(cfg({ ...quiet, maxFood: 1, buriedShare: 1, foodRate: 0 }));
-      (w as unknown as { addFood: (x: number, y: number, l: number, b: boolean) => void }).addFood(102, 100, 10, true);
+      w.food.add(102, 100, 10, true);
       const o = w.spawn({ ...primordialGenome(w.rng), skills, speed: 0.1 }, 100, 100, 30);
       w.step();
       expect(o.eaten > 0).toBe(expectEaten);
@@ -200,7 +200,7 @@ describe('Kultur', () => {
     for (let i = 0; i < 20; i++) w.spawn({ ...primordialGenome(w.rng), culture: true }, 30 * i, 100, 100).learned = { mask: 0b111111111, extra: 0 };
     for (let i = 0; i < 100; i++) w.step();
     expect(w.tippingTick).not.toBeNull();
-    expect(w.events.filter((e) => e.label === 'Kipppunkt')).toHaveLength(1);
+    expect(w.events.filter((e) => e.label === '⚡ Kultur kippt')).toHaveLength(1);
   });
   it('available() kennt den Baum', () => {
     expect(available(0, false)).toEqual(SKILLS.map((d, i) => (d.requires === 0 ? i : -1)).filter((i) => i >= 0));
