@@ -35,7 +35,7 @@ export class FoodField {
    * Futter hinzufügen. Vergrabenes und Oberflächenfutter haben getrennte Obergrenzen –
    * sonst verstopft ungefressenes vergrabenes Futter die Welt, solange niemand graben kann.
    */
-  add(x?: number, y?: number, limit = this.cfg.maxFood, buried?: boolean): void {
+  add(x?: number, y?: number, limit = this.cfg.maxFood, buried?: boolean, fertility?: Float64Array): void {
     const b = buried ?? this.rng.chance(this.cfg.buriedShare);
     const cap = b ? limit * this.cfg.buriedShare : limit * (1 - this.cfg.buriedShare);
     if ((b ? this.buriedCount : this.x.length - this.buriedCount) >= cap) return;
@@ -44,8 +44,15 @@ export class FoodField {
       if (x === undefined || y === undefined) [x, y] = this.terrain.randomLand(this.rng);
       else if (this.terrain.typeAt(x, y) !== LAND) return;
     }
-    this.x.push(x ?? this.rng.range(0, this.cfg.width));
-    this.y.push(y ?? this.rng.range(0, this.cfg.height));
+    const px = x ?? this.rng.range(0, this.cfg.width);
+    const py = y ?? this.rng.range(0, this.cfg.height);
+    if (fertility && x === undefined) {
+      // Ausgelaugter Boden: auf diesem Kontinent wächst entsprechend weniger nach
+      const f = fertility[Math.max(0, this.terrain.regionAt(px, py))];
+      if (f < 1 && !this.rng.chance(f)) return;
+    }
+    this.x.push(px);
+    this.y.push(py);
     this.buried.push(b);
     this.alive.push(true);
     if (b) this.buriedCount++;
@@ -69,11 +76,11 @@ export class FoodField {
     this.alive = new Array(j).fill(true);
   }
 
-  /** Nachwachsen: Rate × Sauerstoff × Krisen-Faktor × Bodenfruchtbarkeit. */
-  grow(crisisFactor: number, fertility: number): void {
-    this.acc += this.cfg.foodRate * this.cfg.oxygen * crisisFactor * fertility;
+  /** Nachwachsen: Rate × Sauerstoff × Krisen-Faktor; ausgelaugter Boden (je Kontinent) lässt weniger nachwachsen. */
+  grow(crisisFactor: number, fertility: Float64Array): void {
+    this.acc += this.cfg.foodRate * this.cfg.oxygen * crisisFactor;
     while (this.acc >= 1) {
-      this.add();
+      this.add(undefined, undefined, this.cfg.maxFood, undefined, fertility);
       this.acc -= 1;
     }
   }

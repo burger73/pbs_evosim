@@ -9,7 +9,7 @@ import type { Census, Sample } from '../core/types.ts';
 import { World } from '../core/world.ts';
 import {
   F_CULTURE, F_PICKED, F_PRED, F_SICK, ORG_STRIDE, O_FLAGS, O_GSKILLS, O_HUE, O_R, O_X, O_Y,
-  type PlannedAction, type SelectedInfo, type Snapshot, type ToWorker,
+  type LineInfo, type PlannedAction, type SelectedInfo, type Snapshot, type ToWorker,
 } from './protocol.ts';
 
 /** Höchstens so lange rechnet ein run-Auftrag, damit die Oberfläche regelmäßig Bilder bekommt. */
@@ -112,6 +112,30 @@ export class SimHost {
     };
   }
 
+  /** Kulturlinien (≥ 10 Träger): Verbreitung über die Kontinente und typische Farbe. */
+  private lineInfo(): LineInfo[] {
+    const w = this.world!;
+    const lines = w.cultureLines.filter((l) => l.carriers >= 10);
+    if (!lines.length) return [];
+    const ids = new Set(lines.map((l) => l.id));
+    const where = new Map<number, Map<number, number>>(), hx = new Map<number, number>(), hy = new Map<number, number>();
+    for (const o of w.organisms) {
+      if (!o.genome.culture || !ids.has(o.genome.line)) continue;
+      const id = o.genome.line, r = w.terrain.regionAt(o.x, o.y);
+      const m = where.get(id) ?? where.set(id, new Map()).get(id)!;
+      m.set(r, (m.get(r) ?? 0) + 1);
+      const a = (o.genome.hue * Math.PI) / 180;
+      hx.set(id, (hx.get(id) ?? 0) + Math.cos(a)); hy.set(id, (hy.get(id) ?? 0) + Math.sin(a));
+    }
+    return lines.map((l) => {
+      const m = where.get(l.id) ?? new Map<number, number>();
+      const total = [...m.values()].reduce((a, b) => a + b, 0) || 1;
+      const continents = [...m].filter(([r]) => r >= 0).map(([region, n]) => ({ region, share: n / total })).sort((a, b) => b.share - a.share);
+      const hue = ((Math.atan2(hy.get(l.id) ?? 0, hx.get(l.id) ?? 1) * 180) / Math.PI + 360) % 360;
+      return { id: l.id, carriers: l.carriers, skills: l.skills, epoch: l.epoch, tippingTick: l.tippingTick, founded: l.founded, continents, hue };
+    }).sort((a, b) => b.epoch - a.epoch || b.carriers - a.carriers);
+  }
+
   snapshot(steps: number, ms: number): Snapshot {
     const w = this.world!;
     const os = w.organisms;
@@ -171,7 +195,9 @@ export class SimHost {
       steps,
       ms,
       reset,
-      terrain: reset && w.cfg.terrain ? { cols: w.terrain.cols, rows: w.terrain.rows, cell: w.terrain.cell, types: w.terrain.types.slice() } : null,
+      terrain: reset && w.cfg.terrain ? { cols: w.terrain.cols, rows: w.terrain.rows, cell: w.terrain.cell, types: w.terrain.types.slice(), region: w.terrain.region.slice() } : null,
+      lines: this.lineInfo(),
+      soil: w.soil.slice(),
     };
   }
 }

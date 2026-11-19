@@ -38,6 +38,7 @@ const loadingBadge = $('loadingBadge');
 const topTable = $<HTMLTableElement>('topTable');
 const topHint = $('topHint');
 const extinctTable = $<HTMLTableElement>('extinctTable');
+const lineTable = $<HTMLTableElement>('lineTable');
 const crisisBtns = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-crisis]'));
 
 for (const [k, label] of Object.entries(FITNESS_LABELS)) fitnessSel.add(new Option(label, k));
@@ -234,7 +235,7 @@ function renderStats(): void {
     `Arten <b>${w.speciesCount}</b>`,
     `Ø Fähigkeiten <b>${s.avgSkills < 10 ? s.avgSkills.toFixed(1) : Math.round(s.avgSkills)}</b>`,
   ];
-  if (s.fertility < 0.99) parts.push(`Boden <b class="${s.fertility < 0.5 ? 'crisis' : ''}">${Math.round(s.fertility * 100)} %</b>`);
+  if (s.fertility < 0.99) parts.push(`Boden${cfg.terrain ? ' ' + continentName(s.fertilityRegion) : ''} <b class="${s.fertility < 0.5 ? 'crisis' : ''}">${Math.round(s.fertility * 100)} %</b>`);
   if (s.infected > 0) parts.push(`krank <b class="crisis">${Math.round(s.infected * 100)} %</b>`);
   if (cfg.mode === 'schiedsrichter') parts.push(`Generation <b>${w.generation}</b>`);
   if (w.crisis) {
@@ -248,9 +249,10 @@ function renderStats(): void {
   const c: string[] = [];
   if (cfg.cultureBoost === 0) c.push('Kultur: <b>aus</b> (Anschwung 0)');
   else if (w.tippingTick !== null) {
-    const ep = s.epoch > 0 ? EPOCHS[s.epoch - 1] : null;
+    const lead = w.lines[0];
+    const ep = lead && lead.epoch > 0 ? EPOCHS[lead.epoch - 1] : null;
     c.push(`<b class="tipped">⚡ Kultur-Kipppunkt bei ${w.tippingTick}</b>`,
-      ep ? `Epoche <b>${ep.icon} ${ep.name}</b> (${s.epoch}/${EPOCHS.length})` : 'Kultur erloschen',
+      ep ? `führende Kultur: <b>Linie ${lead.id} ${ep.icon} ${ep.name}</b>${w.lines.length > 1 ? ` · ${w.lines.length - 1} weitere` : ''}` : 'Kultur erloschen',
       `Kulturträger <b>${Math.round(s.population * s.cultureShare)}</b>`, `Rekord <b>${s.maxSkills}</b> Fähigkeiten`);
   } else if (s.cultureShare > 0) {
     c.push(`🔥 Funke! Kulturträger <b>${Math.round(s.cultureShare * 100)} %</b> (Schwelle ${TIPPING_SHARE * 100} %)`, `ihr Wissen <b>${s.cultureSkills.toFixed(1)}</b> (Schwelle ${TIPPING_SKILLS})`);
@@ -286,7 +288,7 @@ function renderTop(): void {
     : `Sortiert nach Ø Fähigkeiten (wie der Spitzenreiter), nur Arten ab ${LEADER_MIN_MEMBERS} Individuen. Individuen: geschätzte Zahl der Lebewesen dieser Art. Klick auf eine Zeile hebt die Art in der Welt hervor, nochmal Klick hebt es auf.`;
   const head = `<thead><tr><th>#</th><th>Art</th><th class="num">Individuen</th>
     ${judge ? '<th class="num">Ø Kriterium</th>' : ''}<th class="num">Ø Fähigk.</th><th>Fähigkeiten (Mehrheit)</th>
-    <th>Ernährung</th>${cfg.terrain ? '<th>Kontinent</th>' : ''}${judge ? '' : '<th>Kultur</th>'}<th class="num">lebt seit</th></tr></thead>`;
+    <th>Ernährung</th>${cfg.terrain ? '<th>Kontinent</th>' : ''}${judge ? '' : '<th title="Kulturlinie der Mehrheit · Anteil Kulturträger">Linie</th>'}<th class="num">lebt seit</th></tr></thead>`;
   const rows = list.map((s, i) => `<tr data-id="${s.id}" class="${s.id === picked ? 'picked' : ''}">
     <td>${!judge && s.id === snap!.leader?.id ? '🏆' : i + 1}</td>
     <td>${swatch(s.hue)}Art ${s.id}</td>
@@ -296,23 +298,39 @@ function renderTop(): void {
     <td class="skills">${icons(s.common) || '–'}</td>
     <td>${s.predator ? '🥩 Räuber' : '🌿 Pflanzen'}</td>
     ${cfg.terrain ? `<td>${continentName(s.home)}</td>` : ''}
-    ${judge ? '' : `<td>${s.culture > 0 ? `🧠 Linie ${s.line} · ${Math.round(s.culture * 100)} %` : '–'}</td>`}
+    ${judge ? '' : `<td>${s.culture > 0 ? `${s.line} <span class="muted">· ${Math.round(s.culture * 100)} %</span>` : '–'}</td>`}
     <td class="num">${s.born} <span class="muted">(${snap!.tick - s.born})</span></td></tr>`);
   topTable.innerHTML = head + `<tbody>${padRows(rows, 10, 'noch keine Arten gezählt')}</tbody>`;
 }
 
+/** Kulturlinien: Heimat, Träger, Epoche – „Arm und Reich“ auf einen Blick. Fest 4 Zeilen hoch (springt nicht). */
+function renderLines(): void {
+  const lines = snap!.lines.slice(0, 6);
+  const head = `<thead><tr><th>Linie</th><th>Heimat</th><th class="num">Träger</th><th>Epoche</th><th class="num">Ø Fähigk.</th><th class="num">gekippt</th><th class="num">gegründet</th></tr></thead>`;
+  const rows = lines.map((l) => {
+    const [home, ...more] = l.continents.filter((c) => c.share >= 0.05);
+    const where = cfg.terrain ? (home ? continentName(home.region) + (more.length ? ` <span class="muted">+ ${more.map((c) => continentName(c.region)).join(', ')}</span>` : '') : '–') : '–';
+    const ep = l.epoch > 0 ? `${EPOCHS[l.epoch - 1].icon} ${EPOCHS[l.epoch - 1].name}` : '<span class="muted">noch keine</span>';
+    return `<tr><td>${swatch(l.hue)}Linie ${l.id}</td><td>${where}</td><td class="num">${l.carriers}</td><td>${ep}</td>
+      <td class="num">${fmtSkills(l.skills)}</td><td class="num">${l.tippingTick ?? '–'}</td><td class="num">${l.founded}</td></tr>`;
+  });
+  const out = [...rows];
+  for (let i = out.length; i < 4; i++) out.push(`<tr class="filler"><td colspan="7" class="${i === 0 ? 'empty' : ''}">${i === 0 ? 'noch keine Kultur mit 10 Trägern' : '&nbsp;'}</td></tr>`);
+  lineTable.innerHTML = head + `<tbody>${out.join('')}</tbody>`;
+}
+
 function renderExtinct(): void {
   const list = view.extinct.slice(-10).reverse();
-  const head = `<thead><tr><th>Art</th><th>lebte</th><th class="num">Höchststand</th><th class="num">beste Ø Fähigk.</th>
+  const head = `<thead><tr><th>Art</th><th>lebte</th>${cfg.terrain ? '<th>Kontinent</th>' : ''}<th class="num">Höchststand</th><th class="num">beste Ø Fähigk.</th>
     <th>Fähigkeiten (damals)</th><th>Ende</th></tr></thead>`;
   const rows = list.map((e) => `<tr>
     <td>${swatch(e.hue)}Art ${e.id}${e.wasLeader ? ' 🏆' : ''}</td>
-    <td>${e.born}–${e.died}</td>
+    <td>${e.born}–${e.died}</td>${cfg.terrain ? `<td>${continentName(e.home)}</td>` : ''}
     <td class="num">${e.peakMembers} Ind.</td>
     <td class="num">${fmtSkills(e.peakSkills)}</td>
     <td class="skills">${icons(e.common) || '–'}</td>
     <td>${e.crisis ? `während ${CRISES[e.crisis].icon} ${CRISES[e.crisis].label}` : '–'}</td></tr>`);
-  extinctTable.innerHTML = head + `<tbody>${padRows(rows, 6, 'noch keine bemerkenswerte Art ausgestorben')}</tbody>`;
+  extinctTable.innerHTML = head + `<tbody>${padRows(rows, 7, 'noch keine bemerkenswerte Art ausgestorben')}</tbody>`;
 }
 
 function renderLegend(): void {
@@ -393,6 +411,7 @@ function loop(): void {
       shownCensus = key;
       renderLeader();
       renderTop();
+      renderLines();
       renderExtinct();
     }
   }

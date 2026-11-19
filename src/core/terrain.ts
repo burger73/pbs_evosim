@@ -59,6 +59,8 @@ export class Terrain {
   readonly continents: number;
   /** Zellen, auf denen Futter wächst und Lebewesen ausgesetzt werden (Land ohne Gebirge). */
   readonly fertileCells: Int32Array;
+  /** Fruchtbare Zellen je Kontinent (für Ackerland und Raubbau je Kontinent). */
+  readonly fertilePerRegion: Int32Array;
   private readonly width: number;
   private readonly height: number;
 
@@ -74,6 +76,8 @@ export class Terrain {
     const fertile: number[] = [];
     for (let i = 0; i < types.length; i++) if (types[i] === LAND) fertile.push(i);
     this.fertileCells = Int32Array.from(fertile);
+    this.fertilePerRegion = new Int32Array(continents);
+    for (const i of fertile) if (region[i] >= 0) this.fertilePerRegion[region[i]]++;
   }
 
   /** Ohne Gelände: alles Land, ein Kontinent (für Regeltests und den Vergleich mit früher). */

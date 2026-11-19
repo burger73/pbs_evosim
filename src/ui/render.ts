@@ -19,8 +19,23 @@ export function fitCanvas(canvas: HTMLCanvasElement, worldW?: number): number {
 /** Gelände einmal vorzeichnen (eine Zelle = ein Pixel, beim Zeichnen weich hochskaliert). */
 let terrainImg: HTMLCanvasElement | null = null;
 let terrainKey = '';
+/** Beschriftung der Kontinente (Mittelpunkt in Weltkoordinaten). */
+let continentLabels: { name: string; x: number; y: number }[] = [];
 export function setTerrain(t: Snapshot['terrain']): void {
-  if (!t) { terrainImg = null; return; }
+  if (!t) { terrainImg = null; continentLabels = []; return; }
+  // Mittelpunkt je Kontinent – auf der Torus-Welt als Mittelwert auf dem Kreis (sonst landet ein
+  // Kontinent, der über den Rand reicht, in der Mitte der Karte)
+  const acc = new Map<number, [number, number, number, number, number]>();
+  for (let i = 0; i < t.region.length; i++) {
+    const r = t.region[i];
+    if (r < 0) continue;
+    const ax = (((i % t.cols) + 0.5) / t.cols) * 2 * Math.PI, ay = ((Math.floor(i / t.cols) + 0.5) / t.rows) * 2 * Math.PI;
+    const a = acc.get(r) ?? [0, 0, 0, 0, 0];
+    a[0] += Math.cos(ax); a[1] += Math.sin(ax); a[2] += Math.cos(ay); a[3] += Math.sin(ay); a[4]++;
+    acc.set(r, a);
+  }
+  const back = (c: number, s: number, n: number, size: number) => ((((Math.atan2(s, c) / (2 * Math.PI)) * n + n) % n) * size);
+  continentLabels = [...acc].map(([r, a]) => ({ name: String.fromCharCode(65 + r), x: back(a[0], a[1], t.cols, t.cell), y: back(a[2], a[3], t.rows, t.cell) }));
   const water = parseColor(css('--water')), mountain = parseColor(css('--mountain'));
   const c = document.createElement('canvas');
   c.width = t.cols; c.height = t.rows;
@@ -54,6 +69,14 @@ export function drawWorld(canvas: HTMLCanvasElement, cfg: SimConfig, snap: Snaps
     // Zellen ragen am Rand ggf. über die Welt hinaus (aufgerundet) – passend skalieren
     const cell = cfg.terrainCell * k;
     ctx.drawImage(terrainImg, 0, 0, terrainImg.width * cell, terrainImg.height * cell);
+    // Kontinente groß und blass beschriften
+    ctx.save();
+    ctx.font = `700 ${Math.round(110 * k)}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = css('--continent');
+    for (const l of continentLabels) ctx.fillText(l.name, l.x * k, l.y * k);
+    ctx.restore();
   }
 
   if (snap.crisis) {

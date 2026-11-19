@@ -34,8 +34,8 @@ export interface CultureLine {
 }
 
 export class CultureSystem {
-  /** Bodenfruchtbarkeit (Übernutzung durch Landwirtschaft). */
-  fertility = 1;
+  /** Bodenfruchtbarkeit je Kontinent (Übernutzung durch Landwirtschaft); in der offenen Welt ein Wert. */
+  fertility: Float64Array = new Float64Array(1).fill(1);
   /** Lebende (und bis zur nächsten Messung zuletzt gesehene) Kulturlinien. */
   lines = new Map<number, CultureLine>();
   /** Erster Kick (Funke) und erster Kipppunkt irgendeiner Linie. */
@@ -45,9 +45,23 @@ export class CultureSystem {
   /** Kulturträger je Linie im aktuellen Schritt (für Epochen-Grenzen und Erfindungen). */
   private carriersByLine = new Map<number, number>();
   private nextLine = 1;
-  /** Ernte-Potenzial aller Bauern im letzten Tick (für die Begrenzung durch das Ackerland). */
-  private farmPotential = 0;
-  private overuseWarned = false;
+  /** Ernte-Potenzial der Bauern je Kontinent im letzten Tick (für die Begrenzung durch das Ackerland). */
+  private farmPotential: Float64Array = new Float64Array(1);
+  private overuseWarned: boolean[] = [false];
+
+  /** Für die Welt einrichten: ein Boden-Wert je Kontinent. */
+  init(continents: number): void {
+    this.fertility = new Float64Array(continents).fill(1);
+    this.farmPotential = new Float64Array(continents);
+    this.overuseWarned = new Array(continents).fill(false);
+  }
+
+  /** Schlechtester Boden und sein Kontinent. */
+  worstSoil(): { value: number; region: number } {
+    let value = 1, region = 0;
+    for (let r = 0; r < this.fertility.length; r++) if (this.fertility[r] < value) { value = this.fertility[r]; region = r; }
+    return { value, region };
+  }
   private lastSparkEvent = -Infinity;
   private stoneAgeShown = false;
 
@@ -66,14 +80,23 @@ export class CultureSystem {
     const byLine = this.carriersByLine;
     byLine.clear();
     let carriers = 0;
-    let farmers = 0;
+    const regions = this.fertility.length;
+    const farmers = new Float64Array(regions);
+    // Anteil des fruchtbaren Landes je Kontinent: Ackerland und Raubbau verteilen sich nach Fläche
+    const land = w.terrain.fertilePerRegion;
+    let totalLand = 0;
+    for (let r = 0; r < regions; r++) totalLand += land[r];
+    const share = (r: number) => (regions === 1 || totalLand === 0 ? 1 : land[r] / totalLand);
     for (const o of organisms) {
       if (!o.alive || !o.genome.culture) continue;
       carriers++;
       byLine.set(o.genome.line, (byLine.get(o.genome.line) ?? 0) + 1);
     }
     // Ackerland begrenzt die Gesamternte: mehr Bauern auf demselben Land bringen nicht mehr
-    const landFactor = this.farmPotential > 0 ? Math.min(1, (cfg.landCapacity * this.fertility) / this.farmPotential) : 1;
+    const landFactor = new Float64Array(regions);
+    for (let r = 0; r < regions; r++) {
+      landFactor[r] = this.farmPotential[r] > 0 ? Math.min(1, (cfg.landCapacity * share(r) * this.fertility[r]) / this.farmPotential[r]) : 1;
+    }
     for (let idx = 0; idx < organisms.length; idx++) {
       const o = organisms[idx];
       if (!o.alive) continue;
@@ -125,8 +148,9 @@ export class CultureSystem {
       // Landwirtschaft
       const harvest = w.crisis ? CRISES[w.crisis.kind].food : 1; // Missernten in Krisen
       const machines = has(o.learned.mask, SKILL.maschinen) ? 2 : 1; // Maschinen: doppelte Ernte, doppelter Raubbau
-      if (has(o.learned.mask, SKILL.landwirtschaft)) farmers += machines;
-      if (has(o.learned.mask, SKILL.landwirtschaft) && rng.chance(cfg.farmRate * harvest * machines * landFactor)) {
+      const region = regions === 1 ? 0 : w.terrain.regionAt(o.x, o.y); // auf dem Wasser (Boot) wird nicht geackert
+      if (has(o.learned.mask, SKILL.landwirtschaft) && region >= 0) farmers[region] += machines;
+      if (has(o.learned.mask, SKILL.landwirtschaft) && region >= 0 && rng.chance(cfg.farmRate * harvest * machines * landFactor[region])) {
         w.food.add(
           (o.x + rng.gauss() * 25 + cfg.width) % cfg.width,
           (o.y + rng.gauss() * 25 + cfg.height) % cfg.height,
@@ -136,13 +160,16 @@ export class CultureSystem {
       }
     }
 
-    this.farmPotential = farmers * cfg.farmRate;
-    // Übernutzung: Rodung senkt die Bodenfruchtbarkeit, die sich nur langsam erholt
-    this.fertility += cfg.regenRate * (1 - this.fertility) - cfg.clearRate * farmers;
-    this.fertility = Math.max(0.15, Math.min(1, this.fertility));
-    if (!this.overuseWarned && this.fertility < 0.5) {
-      this.overuseWarned = true;
-      w.addEvent('🪓 Raubbau');
+    // Übernutzung: Rodung senkt die Bodenfruchtbarkeit des Kontinents, die sich nur langsam erholt.
+    // Gleich viele Bauern auf halb so viel Land laugen den Boden doppelt so schnell aus.
+    for (let r = 0; r < regions; r++) {
+      this.farmPotential[r] = farmers[r] * cfg.farmRate;
+      const f = this.fertility[r] + (cfg.regenRate * (1 - this.fertility[r]) - (cfg.clearRate * farmers[r]) / share(r)); // Klammerung wie früher (Gleitkomma!)
+      this.fertility[r] = Math.max(0.15, Math.min(1, f));
+      if (!this.overuseWarned[r] && this.fertility[r] < 0.5) {
+        this.overuseWarned[r] = true;
+        w.addEvent(regions === 1 ? '🪓 Raubbau' : `🪓 Raubbau (${String.fromCharCode(65 + r)})`);
+      }
     }
   }
 

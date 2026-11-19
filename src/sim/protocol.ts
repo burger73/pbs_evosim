@@ -75,6 +75,23 @@ export interface Snapshot {
   ms: number;
   /** true = Antwort auf init (Oberfläche setzt ihre Listen zurück). */
   reset: boolean;
-  /** Nur bei reset: das Gelände (LAND/WATER/MOUNTAIN je Zelle). */
-  terrain: { cols: number; rows: number; cell: number; types: Uint8Array } | null;
+  /** Nur bei reset: das Gelände (LAND/WATER/MOUNTAIN je Zelle, Kontinent je Zelle). */
+  terrain: { cols: number; rows: number; cell: number; types: Uint8Array; region: Int8Array } | null;
+  /** Kulturlinien mit mindestens 10 Trägern. */
+  lines: LineInfo[];
+  /** Bodenfruchtbarkeit je Kontinent. */
+  soil: number[];
+}
+
+export interface LineInfo {
+  id: number;
+  carriers: number;
+  skills: number;
+  epoch: number;
+  tippingTick: number | null;
+  founded: number;
+  /** Kontinente, auf denen die Linie lebt (Heimat zuerst), jeweils mit Anteil der Träger. */
+  continents: { region: number; share: number }[];
+  /** Typische Farbe der Träger (Mittelwert auf dem Farbkreis). */
+  hue: number;
 }
