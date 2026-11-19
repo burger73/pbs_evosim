@@ -4,18 +4,19 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>EvoSim</title>
-    <meta name="description" content="Evolution im Browser: Fähigkeiten, Krisen, Kultur – und wer ist der Schiedsrichter?" />
+    <meta name="description" content="Evolution im Browser: Kontinente, Fähigkeiten, Krisen, Kulturen – und wer ist der Schiedsrichter?" />
   </head>
   <body>
     <header id="intro">
       <div class="intro">
         <h1>EvoSim</h1>
         <p>
-          Eine kleine Welt, in der Evolution live passiert. Jeder Punkt ist ein Lebewesen mit vererbtem Körper,
-          einem winzigen Gehirn und vielleicht Fähigkeiten wie Graben, Netze bauen oder Sehen. Niemand programmiert,
-          was sich durchsetzt: Mutation erzeugt Varianten, die Umwelt sortiert aus. Mit Glück zündet irgendwann
-          <strong>Kultur</strong> und trägt eine Art von der Steinzeit bis zur Neuzeit, solange sie groß genug bleibt.
-          Raubbau, Seuchen und Krisen können alles wieder zurückwerfen.
+          Eine kleine Welt aus Kontinenten, auf der Evolution live passiert. Jeder Punkt ist ein Lebewesen mit
+          vererbtem Körper, einem winzigen Gehirn und vielleicht Fähigkeiten wie Graben, Netze bauen oder Sehen.
+          Niemand programmiert, was sich durchsetzt: Mutation erzeugt Varianten, die Umwelt sortiert aus. Mit Glück
+          zündet irgendwann <strong>Kultur</strong> – oft an mehreren Orten – und trägt sie von der Steinzeit bis zur
+          Neuzeit, solange genug Köpfe mitlernen. Getrennte Kulturen kommen verschieden weit, bis die erste mit Booten
+          übers Meer fährt. Raubbau, Seuchen und Krisen können alles wieder zurückwerfen.
         </p>
         <details class="howto">
           <summary>So liest du das Bild</summary>
@@ -23,9 +24,10 @@
             <li><b>Punkt</b> = ein Lebewesen · Größe = Körpergröße · <b>Farbe</b> = Abstammung (verwandte Linien sind ähnlich gefärbt)</li>
             <li><span class="key k-pred"></span><b>roter Rand</b> = Räuber · <span class="key k-skill"></span><b>weißer Kern</b> = vererbte Fähigkeiten (je größer, desto mehr) ·
               <span class="key k-cult"></span><b>goldener Ring</b> = Kulturträger · <span class="key k-sick"></span><b>grünlicher Rand</b> = krank</li>
-            <li><span class="key k-water"></span><b>Wasser</b> trennt die Kontinente – nur selten treibt ein Lebewesen hinüber (Treibgut) ·
+            <li><b>A, B, C, D</b> = Kontinente · <span class="key k-water"></span><b>Wasser</b> trennt sie – nur selten treibt ein Lebewesen hinüber (Treibgut), Kulturen erst mit 🛶 Boot ·
               <span class="key k-mountain"></span><b>Gebirge</b> ist karg (kein Futter) und in Kältekrisen doppelt so kalt</li>
             <li><b>kleine Quadrate:</b> <span class="key k-food"></span>grün = Futter, <span class="key k-buried"></span>braun = vergrabenes Futter (nur für Gräber 🦀 erreichbar)</li>
+            <li><b>Kulturlinie</b> = alle, die von demselben „Kick“ abstammen; jede lernt nur unter sich und hat ihre eigene Epoche (Tabelle „Kulturen“ unter den Diagrammen)</li>
             <li><b>Bedienung:</b> Klick auf ein Lebewesen zeigt sein Erbgut · Klick auf eine Art in der Tabelle hebt sie hervor ·
               <kbd>Leertaste</kbd> = Pause · Krisen löst du rechts aus</li>
             <li>Die Welt ist bewusst klein (höchstens 900 Lebewesen), damit sie im Browser flüssig läuft. Gerade in kleinen Gruppen
@@ -60,6 +62,11 @@
           <canvas id="chartTraits" class="chart"></canvas>
         </figure>
 
+        <section class="card nature-only">
+          <h2>🧠 Kulturen</h2>
+          <p class="hint">Jeder „Kick“ gründet eine Kulturlinie. Gelernt wird nur in der eigenen Linie, und jede hat ihre eigene Epoche – getrennte Kulturen können verschieden weit kommen. Gezeigt werden Linien ab 10 Trägern; Heimat = Kontinent der meisten Träger, „+“ = per Boot oder Treibgut auch dort.</p>
+          <div class="table-wrap"><table class="species" id="lineTable"></table></div>
+        </section>
         <section class="card">
           <h2 id="topTitle">🏆 Die 10 stärksten Arten</h2>
           <p class="hint" id="topHint"></p>

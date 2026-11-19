@@ -113,10 +113,12 @@ sättigendem Ertragsbonus.
 - **Weitergabe an Kinder** geht mit Verlusten: Pro Fähigkeit bleibt sie mit 85 % erhalten, mit Schrift vollständig.
 - **Epochen brauchen Köpfe:** Sesshaftigkeit ab 50, Hochkultur ab 150, Neuzeit ab 300 Kulturträgern **der
   eigenen Linie**. Reicht die Zahl nicht mehr, gehen Fähigkeiten dieser Epochen nach und nach verloren. Das ist
-  der **Tasmanien-Effekt** (Henrich). Die Bodenfruchtbarkeit (Raubbau) gilt dagegen noch weltweit.
-- **Landwirtschaft** baut Futter an. Begrenzt ist das durch das Ackerland, also landCapacity ×
-  Bodenfruchtbarkeit. Jeder Bauer senkt die Fruchtbarkeit (**Raubbau**), die sich nur langsam erholt.
-  ⚙️ Maschinen verdoppeln Ernte und Raubbau.
+  der **Tasmanien-Effekt** (Henrich).
+- **Landwirtschaft** baut Futter an. Begrenzt ist das durch das Ackerland **des eigenen Kontinents**, also
+  landCapacity × Landanteil × Bodenfruchtbarkeit. Jeder Bauer senkt die Fruchtbarkeit seines Kontinents
+  (**Raubbau**). Auf einem kleinen Kontinent geht das entsprechend schneller, und der Boden erholt sich nur
+  langsam. Ausgelaugter Boden lässt auf diesem Kontinent weniger Futter nachwachsen, die anderen Kontinente
+  bleiben unberührt. ⚙️ Maschinen verdoppeln Ernte und Raubbau.
 - **Komplexitätskosten** (nach Tainter): Jede erlernte Fähigkeit ab der fünften kostet Energie, weitere
   Erfindungen kosten logarithmisch mehr. Komplexe Kulturen sind deshalb in Krisen verwundbar.
 - **Kultur-Kipppunkt** je Linie: Die Träger der Linie stellen mindestens 10 % der Population und haben im
@@ -126,6 +128,8 @@ sättigendem Ertragsbonus.
   3 von 8 Läufen zeitweise mindestens 2 gleichzeitig gekippte Kulturen auf verschiedenen Kontinenten (vorher
   0 von 8). Am Ende setzt sich aber meist eine Linie durch. Wer zuerst Boote hat, besiedelt die anderen
   Kontinente und gewinnt die Konkurrenz ums Futter.
+  Mit Boden je Kontinent dauern Parallelphasen länger (Ø ~1700 statt ~1100 Schritte, 8 Seeds, wegen der
+  geänderten Mathematik allerdings keine identische Stichprobe).
 
 ## Krisen (`crisis.ts`)
 

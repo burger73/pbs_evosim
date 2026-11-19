@@ -55,6 +55,7 @@ export class World {
     // Gelände mit eigenem Zufallsgenerator: verändert die Zufallsfolge der Simulation nicht
     this.terrain = cfg.terrain ? Terrain.generate(cfg) : Terrain.open(cfg);
     this.food = new FoodField(cfg, this.rng, this.terrain);
+    this.cultureSystem.init(this.terrain.continents);
     const n = cfg.mode === 'schiedsrichter' ? cfg.judgePopulation : cfg.initialPopulation;
     for (let i = 0; i < n; i++) this.spawn(primordialGenome(this.rng));
     for (let i = 0; i < cfg.maxFood * 0.6; i++) this.food.add();
@@ -74,7 +75,10 @@ export class World {
   get leader() { return this.censusSystem.leader; }
   get extinct() { return this.censusSystem.extinct; }
   get firstEyes() { return this.censusSystem.firstEyes; }
-  get fertility() { return this.cultureSystem.fertility; }
+  /** Schlechteste Bodenfruchtbarkeit (über alle Kontinente). */
+  get fertility() { return this.cultureSystem.worstSoil().value; }
+  /** Bodenfruchtbarkeit je Kontinent. */
+  get soil(): readonly number[] { return [...this.cultureSystem.fertility]; }
   get epoch() { return this.cultureSystem.epoch; }
   get firstSpark() { return this.cultureSystem.firstSpark; }
   get tippingTick() { return this.cultureSystem.tippingTick; }
@@ -145,7 +149,7 @@ export class World {
       naturalSelection(this);
     }
     this.food.compact();
-    this.food.grow(this.crisis ? CRISES[this.crisis.kind].food : 1, this.fertility);
+    this.food.grow(this.crisis ? CRISES[this.crisis.kind].food : 1, this.cultureSystem.fertility);
     this.tick++;
     this.crisisSystem.afterStep(this);
     if (cfg.mode === 'schiedsrichter' && this.tick % cfg.generationTicks === 0) judge(this);
@@ -166,6 +170,7 @@ export class World {
 
   private record(): void {
     this.cultureSystem.measure(this); // Kulturlinien: Epochen, Kipppunkte
+    const soil = this.cultureSystem.worstSoil();
     const os = this.organisms;
     const n = os.length || 1;
     let pred = 0, s = 0, v = 0, e = 0, d = 0, sk = 0, cult = 0, cultSk = 0, maxSk = 0, ready = 0, sick = 0;
@@ -198,7 +203,8 @@ export class World {
       maxSkills: maxSk,
       kickReady: ready,
       crisis: this.crisis?.kind ?? null,
-      fertility: this.fertility,
+      fertility: soil.value,
+      fertilityRegion: soil.region,
       infected: sick / n,
       epoch: this.cultureSystem.epoch,
     };

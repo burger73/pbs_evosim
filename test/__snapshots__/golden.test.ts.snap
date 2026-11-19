@@ -53,17 +53,17 @@ exports[`Golden Master – frühere Welt ohne Gelände > Schiedsrichter: „Wer 
 
 exports[`Golden Master – neue Welt mit Kontinenten > Kontinente, Kulturlinien, Eiszeit (Seed 8) 1`] = `
 {
-  "avgSkills": 125.504,
-  "cultureShare": 0.986,
-  "events": 30,
+  "avgSkills": 87.308581,
+  "cultureShare": 0.943894,
+  "events": 29,
   "extinct": 50,
-  "food": 93,
-  "hash": "16d7be78",
-  "leader": 297,
-  "lines": "2:442/E4 25:4/E1 30:2/E0 31:6/E1 33:2/E0 36:17/E1 55:4/E1 58:1/E0 63:1/E0 65:14/E1",
-  "population": 500,
-  "species": 21,
+  "food": 120,
+  "hash": "9c7e3e96",
+  "leader": 260,
+  "lines": "2:512/E4 30:3/E1 31:7/E1 33:3/E1 36:9/E1 50:14/E2 52:4/E1 58:3/E1 64:12/E1 68:3/E1 71:2/E0",
+  "population": 606,
+  "species": 20,
   "tick": 7000,
-  "tipping": 5980,
+  "tipping": 6120,
 }
 `;

@@ -50,6 +50,8 @@ export interface Sample {
   crisis: CrisisKind | null;
   /** Bodenfruchtbarkeit 0..1 (sinkt durch Landwirtschaft). */
   fertility: number;
+  /** Kontinent mit dem schlechtesten Boden. */
+  fertilityRegion: number;
   /** Anteil Kranker (0..1). */
   infected: number;
   /** Erreichte Epoche der Kultur (0 = keine, 1–4). */
@@ -89,6 +91,8 @@ export interface ExtinctSpecies {
   /** Mehrheits-Fähigkeiten zum Zeitpunkt der besten Ø Fähigkeiten. */
   common: number;
   wasLeader: boolean;
+  /** Kontinent, auf dem die Art zuletzt hauptsächlich lebte (−1 = unbekannt). */
+  home: number;
   /** Krise, während der die Art verschwand. */
   crisis: CrisisKind | null;
 }
