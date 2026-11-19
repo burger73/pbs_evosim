@@ -58,6 +58,14 @@ export function drawWorld(canvas: HTMLCanvasElement, world: World, selected: Org
       ctx.fillStyle = 'rgba(255,255,255,0.85)';
       ctx.fill();
     }
+    // Kranke: grünlicher Rand
+    if (o.infection === 1) {
+      ctx.beginPath();
+      ctx.arc(x, y, r + 1 * k, 0, Math.PI * 2);
+      ctx.lineWidth = Math.max(1.5, 1.5 * k);
+      ctx.strokeStyle = css('--sick');
+      ctx.stroke();
+    }
     // Kulturträger: goldener Ring
     if (o.genome.culture) {
       ctx.beginPath();
@@ -93,6 +101,13 @@ function drawEvents(ctx: CanvasRenderingContext2D, events: readonly SimEvent[], 
   for (const e of events) {
     if (e.tick < t0) continue;
     const x = xOf(e.tick);
+    // Kleine Ereignisse (Spitzenreiter-Wechsel, Funke) nur als kurzer Strich unten
+    if (e.label.startsWith('🏆') || e.label === 'Funke') {
+      ctx.setLineDash([]);
+      ctx.beginPath(); ctx.moveTo(x, H); ctx.lineTo(x, H - 6 * dpr); ctx.stroke();
+      ctx.setLineDash([3 * dpr, 3 * dpr]);
+      continue;
+    }
     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
     row = x - lastX < 60 * dpr ? (row + 1) % 3 : 0; // Beschriftungen nicht übereinander
     ctx.fillText(e.label, x + 3 * dpr, (11 + row * 11) * dpr);

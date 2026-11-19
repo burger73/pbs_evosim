@@ -8,6 +8,8 @@
   --food: #6aa84f;
   --buried: #9b7a4f;
   --faint: rgba(120,120,120,0.28);
+  --sick: #7fbf2a;
+  --soil: #8b5a2b;
   --accent: #2f6fdf;
   --pop: #3b9b5a;
   --pred: #d1453b;
@@ -33,6 +35,8 @@
     --food: #4f8a3a;
     --buried: #7a5f3c;
     --faint: rgba(160,160,160,0.25);
+    --sick: #a6e04a;
+    --soil: #c08a55;
     --accent: #6d9cf0;
     --pop: #5cc27d;
     --pred: #ef6a5f;
@@ -151,3 +155,4 @@ body.mode-schiedsrichter .nature-only { display: none; }
 }
 .leader .swatch { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
 .leader .muted { color: var(--muted); }
+.c-soil { color: var(--soil); }

@@ -164,8 +164,18 @@ describe('Kultur', () => {
     const c = w.spawn({ ...primordialGenome(w.rng), culture: true }, 100, 100, 1e6);
     const n = w.spawn({ ...primordialGenome(w.rng) }, 600, 400, 1e6);
     for (let i = 0; i < 200; i++) w.step();
-    expect(has(c.learned.mask, SKILL.schrift)).toBe(true);
+    expect(has(c.learned.mask, SKILL.feuer)).toBe(true); // Steinzeit: geht allein
+    expect(has(c.learned.mask, SKILL.schrift)).toBe(false); // Hochkultur: braucht 150 Kulturträger
     expect(popcount(n.learned.mask)).toBe(0);
+  });
+  it('vergisst Fähigkeiten, wenn die Kultur zu klein für ihre Epoche ist (Tasmanien-Effekt)', () => {
+    const w = new World(cfg({ ...quiet, cultureBoost: 0, discoveryRate: 0, learnRate: 0, forgetRate: 0.05, maxPopulation: 1 }));
+    const o = w.spawn({ ...primordialGenome(w.rng), culture: true }, 100, 100, 1e6);
+    o.learned = { mask: G(SKILL.feuer) | G(SKILL.schrift) | G(SKILL.landwirtschaft), extra: 0 };
+    for (let i = 0; i < 300; i++) w.step();
+    expect(has(o.learned.mask, SKILL.feuer)).toBe(true);
+    expect(has(o.learned.mask, SKILL.schrift)).toBe(false);
+    expect(has(o.learned.mask, SKILL.landwirtschaft)).toBe(false);
   });
   it('Erlerntes erben nur Kinder von Kulturträgern', () => {
     for (const culture of [false, true]) {

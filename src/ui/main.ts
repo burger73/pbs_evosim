@@ -1,7 +1,7 @@
 import './style.css';
 import { CRISES, defaultConfig, FITNESS_LABELS, type CrisisKind, type Fitness, type Mode, type SimConfig } from '../core/config.ts';
 import { LIMITS } from '../core/genome.ts';
-import { SKILLS, has } from '../core/skills.ts';
+import { EPOCHS, SKILLS, has } from '../core/skills.ts';
 import { TIPPING_SHARE, TIPPING_SKILLS, World, type Organism } from '../core/world.ts';
 import { css, drawChart, drawSpeciesChart, drawWorld } from './render.ts';
 
@@ -171,6 +171,8 @@ function renderStats(): void {
     `Arten <b>${world.speciesCount}</b>`,
     `Ø Fähigkeiten <b>${s.avgSkills < 10 ? s.avgSkills.toFixed(1) : Math.round(s.avgSkills)}</b>`,
   ];
+  if (s.fertility < 0.99) parts.push(`Boden <b class="${s.fertility < 0.5 ? 'crisis' : ''}">${Math.round(s.fertility * 100)} %</b>`);
+  if (s.infected > 0) parts.push(`krank <b class="crisis">${Math.round(s.infected * 100)} %</b>`);
   if (cfg.mode === 'schiedsrichter') parts.push(`Generation <b>${world.generation}</b>`);
   if (world.crisis) {
     const def = CRISES[world.crisis.kind];
@@ -183,7 +185,10 @@ function renderStats(): void {
   const c: string[] = [];
   if (cfg.cultureBoost === 0) c.push('Kultur: <b>aus</b> (Anschwung 0)');
   else if (world.tippingTick !== null) {
-    c.push(`<b class="tipped">⚡ Kipppunkt bei ${world.tippingTick}</b>`, `Kulturträger <b>${Math.round(s.cultureShare * 100)} %</b>`, `Rekord <b>${s.maxSkills}</b> Fähigkeiten`);
+    const ep = s.epoch > 0 ? EPOCHS[s.epoch - 1] : null;
+    c.push(`<b class="tipped">⚡ Kipppunkt bei ${world.tippingTick}</b>`,
+      ep ? `Epoche <b>${ep.icon} ${ep.name}</b> (${s.epoch}/${EPOCHS.length})` : 'Kultur erloschen',
+      `Kulturträger <b>${Math.round(s.population * s.cultureShare)}</b>`, `Rekord <b>${s.maxSkills}</b> Fähigkeiten`);
   } else if (s.cultureShare > 0) {
     c.push(`🔥 Funke! Kulturträger <b>${Math.round(s.cultureShare * 100)} %</b> (Schwelle ${TIPPING_SHARE * 100} %)`, `ihr Wissen <b>${s.cultureSkills.toFixed(1)}</b> (Schwelle ${TIPPING_SKILLS})`);
   } else {
@@ -240,6 +245,7 @@ function renderCharts(): void {
     { color: css('--speed'), value: (s) => (s.avgSpeed - LIMITS.speed[0]) / (LIMITS.speed[1] - LIMITS.speed[0]) },
     { color: css('--sense'), value: (s) => s.avgSense },
     { color: css('--diet'), value: (s) => s.avgDiet },
+    { color: css('--soil'), value: (s) => s.fertility },
   ], world.events, 1);
 }
 

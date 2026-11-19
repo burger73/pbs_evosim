@@ -3,7 +3,7 @@ import { CRISES, kickRate, type CrisisKind, type Fitness, type SimConfig } from 
 import { genomeDistance, hueDistance, mutate, primordialGenome, type Genome } from './genome.ts';
 import { Grid, wrapDelta } from './grid.ts';
 import { Rng } from './rng.ts';
-import { GENETIC_MASK, SKILL, available, extraBonus, has, nothingLearned, popcount, upkeep, type Learned } from './skills.ts';
+import { EPOCHS, EXTRA_MIN, GENETIC_MASK, SKILL, SKILLS, available, epochFor, extraBonus, has, nothingLearned, popcount, upkeep, type Learned } from './skills.ts';
 import { clusterSpecies } from './species.ts';
 
 export interface Organism {
@@ -24,6 +24,8 @@ export interface Organism {
   learned: Learned;
   /** Artgenossen in der Nähe (für die Fähigkeit „Gruppe“). */
   group: number;
+  /** Seuche: 0 gesund, 1 krank, 2 immun. */
+  infection: number;
 }
 
 export interface Sample {
@@ -46,6 +48,12 @@ export interface Sample {
   /** Lebewesen, die Bedingung b) für den Kick erfüllen. */
   kickReady: number;
   crisis: CrisisKind | null;
+  /** Bodenfruchtbarkeit 0..1 (sinkt durch Landwirtschaft). */
+  fertility: number;
+  /** Anteil Kranker (0..1). */
+  infected: number;
+  /** Erreichte Epoche der Kultur (0 = keine, 1–4). */
+  epoch: number;
 }
 
 export interface SpeciesStat {
@@ -130,6 +138,16 @@ export class World {
 
   crisis: { kind: CrisisKind; until: number; start: number } | null = null;
   crisisReports: CrisisReport[] = [];
+  /** Bodenfruchtbarkeit (Übernutzung durch Landwirtschaft). */
+  fertility = 1;
+  /** Erreichte Epoche der Kultur (0 = keine). */
+  epoch = 0;
+  private carriers = 0;
+  /** Ernte-Potenzial aller Bauern im letzten Tick (für die Begrenzung durch das Ackerland). */
+  private farmPotential = 0;
+  private epochPending: { e: number; n: number } | null = null;
+  private maxEpochReached = 0;
+  private overuseWarned = false;
 
   /** Erster Kick (Funke) und Kipppunkt der Kultur. */
   firstSpark: number | null = null;
@@ -140,6 +158,8 @@ export class World {
   private nextId = 1;
   private nextSpeciesId = 1;
   private speciesRegistry: SpeciesRecord[] = [];
+  /** Erbgut-Stichprobe für die Neubesiedlung nach einem Massenaussterben. */
+  private refugium: Genome[] = [];
   private crisisStart: { buckets: number[]; species: (SpeciesStat & { rep: Genome })[] } | null = null;
   private foodAcc = 0;
   private buriedCount = 0;
@@ -200,13 +220,19 @@ export class World {
     if (has(sb, SKILL.huette) && !aW) return false; // Hütte schützt
     const ra = this.radius(a), rb = this.radius(b);
     // Kulturträger mit Waffen jagen alles bis doppelte Größe – außer andere Kulturträger
-    if (aW && !b.genome.culture && ra * 2 > rb) return true;
+    if (aW && !b.genome.culture && ra * (has(sa, SKILL.metall) ? 3 : 2) > rb) return true;
     if (!this.isPredator(a)) return false;
     let ratio = this.cfg.predatorSizeRatio;
     if (has(sa, SKILL.gruppe) && a.group >= 2) ratio = 0.9; // Rudeljagd
     if (has(sb, SKILL.bau)) ratio *= 1.5; // aus dem Bau schwer herauszuholen
     if (has(sb, SKILL.gruppe) && b.group >= 2) ratio *= 1.4; // Schutz in der Herde
     return ra > ratio * rb;
+  }
+
+  /** Speichergrenze für Energie: doppelte Teilungsschwelle, mit Vorrat das Dreifache davon. */
+  maxEnergy(o: Organism): number {
+    const area = o.genome.size * o.genome.size;
+    return this.cfg.reproFactor * area * 2 * (has(this.skillsOf(o), SKILL.vorrat) ? 3 : 1);
   }
 
   maxAge(o: Organism): number {
@@ -241,6 +267,7 @@ export class World {
       travelled: 0,
       learned: nothingLearned(),
       group: 0,
+      infection: 0,
     };
     this.organisms.push(o);
     return o;
@@ -255,6 +282,9 @@ export class World {
     this.addEvent(`${def.icon} ${def.label}`);
     if (def.shock > 0) {
       for (const o of this.organisms) if (this.rng.chance(def.shock)) o.alive = false;
+    }
+    if (kind === 'seuche') {
+      for (const o of this.organisms) if (this.rng.chance(this.cfg.diseaseStart)) o.infection = 1;
     }
     this.takeCensus();
     const reps = new Map(this.speciesRegistry.map((r) => [r.id, r.rep]));
@@ -290,6 +320,7 @@ export class World {
       survived: { count: sur.length, avgSkills: avg(sur) },
     });
     this.addEvent(`Ende ${CRISES[this.crisis.kind].label}`);
+    if (this.crisis.kind === 'seuche') for (const o of this.organisms) o.infection = 0;
     this.crisis = null;
     this.crisisStart = null;
   }
@@ -341,7 +372,7 @@ export class World {
 
   private growFood(): void {
     const mul = this.crisis ? CRISES[this.crisis.kind].food : 1;
-    this.foodAcc += this.cfg.foodRate * this.cfg.oxygen * mul;
+    this.foodAcc += this.cfg.foodRate * this.cfg.oxygen * mul * this.fertility;
     while (this.foodAcc >= 1) {
       this.addFood();
       this.foodAcc -= 1;
@@ -456,12 +487,33 @@ export class World {
         if (has(sk, SKILL.kleidung)) cold *= 0.5;
         if (has(sk, SKILL.huette)) cold *= 0.3;
       }
-      o.energy -= base + cfg.moveCost * area * v * v + cfg.senseCost * (R / cfg.maxSense) + cold
-        + upkeep(o.genome.skills) + (o.genome.culture ? cfg.cultureCost : 0);
+      const move = cfg.moveCost * area * v * v * (has(sk, SKILL.maschinen) ? 0.5 : 1);
+      // Komplexitätskosten: einfache Kultur (bis 4 erlernte Fähigkeiten) ist billig
+      const complexity = cfg.complexityCost * (Math.max(0, popcount(o.learned.mask) - 4) + 2 * Math.log2(1 + o.learned.extra));
+      o.energy -= base + move + cfg.senseCost * (R / cfg.maxSense) + cold
+        + upkeep(o.genome.skills) + (o.genome.culture ? cfg.cultureCost : 0) + complexity;
+
+      // --- Seuche ------------------------------------------------------
+      if (o.infection === 1) {
+        const med = has(sk, SKILL.medizin);
+        if (this.rng.chance(cfg.diseaseMortality * (med ? 0.5 : 1))) o.alive = false;
+        else if (this.rng.chance(cfg.recoverRate)) o.infection = 2;
+        else {
+          const rr = cfg.infectRadius * cfg.infectRadius;
+          this.orgGrid.forEachNear(o.x, o.y, cfg.infectRadius, (qi) => {
+            const q = this.organisms[qi];
+            if (q === o || !q.alive || q.infection !== 0) return;
+            const dx = wrapDelta(q.x - o.x, W), dy = wrapDelta(q.y - o.y, H);
+            if (dx * dx + dy * dy > rr) return;
+            const p = cfg.infectRate * (hueDistance(q.genome.hue, o.genome.hue) < 40 ? 1 : 0.1);
+            if (this.rng.chance(p)) q.infection = 1;
+          });
+        }
+      }
 
       // --- Fressen: Pflanzen -------------------------------------------
       if (o.genome.diet < 0.8) {
-        const plantGain = cfg.foodEnergy * (1 - o.genome.diet) * (has(sk, SKILL.werkzeug) ? 1.4 : 1) * extraBonus(o.learned.extra);
+        const plantGain = cfg.foodEnergy * (1 - o.genome.diet) * (has(sk, SKILL.werkzeug) ? 1.4 : 1) * (has(sk, SKILL.metall) ? 1.3 : 1) * extraBonus(o.learned.extra);
         const reach = (r + cfg.foodRadius) * (has(sk, SKILL.netz) ? 2 : 1);
         this.foodGrid.forEachNear(o.x, o.y, reach, (fi) => {
           if (!this.foodAlive[fi] || (this.foodBuried[fi] && !digger)) return;
@@ -494,6 +546,12 @@ export class World {
       }
     }
 
+    // Überschüssige Energie verfällt (sonst horten Lebewesen unbegrenzt, sobald die Population voll ist)
+    for (const o of this.organisms) {
+      const cap = this.maxEnergy(o);
+      if (o.energy > cap) o.energy = cap;
+    }
+
     if (cfg.mode === 'natur') {
       this.culture();
       this.naturalSelection();
@@ -522,7 +580,12 @@ export class World {
     const cfg = this.cfg;
     const kp = kickRate(cfg.cultureBoost);
     let carriers = 0;
+    let farmers = 0;
     for (const o of this.organisms) if (o.alive && o.genome.culture) carriers++;
+    this.carriers = carriers;
+    const maxEpoch = epochFor(carriers);
+    // Ackerland begrenzt die Gesamternte: mehr Bauern auf demselben Land bringen nicht mehr
+    const landFactor = this.farmPotential > 0 ? Math.min(1, (cfg.landCapacity * this.fertility) / this.farmPotential) : 1;
     for (let idx = 0; idx < this.organisms.length; idx++) {
       const o = this.organisms[idx];
       if (!o.alive) continue;
@@ -540,8 +603,17 @@ export class World {
       if (!o.genome.culture) continue;
       const n = this.skillCount(o);
 
-      // Entdecken: je mehr man kann, desto eher (Wissen kombiniert sich)
-      if (this.rng.chance(cfg.discoveryRate * (1 + 0.2 * n))) this.learnSomething(o, null);
+      // Entdecken: je mehr man kann, desto eher (Wissen kombiniert sich); Wissenschaft verdoppelt
+      const sci = has(o.learned.mask, SKILL.wissenschaft) ? 2 : 1;
+      if (this.rng.chance(cfg.discoveryRate * (1 + 0.2 * n) * sci)) this.learnSomething(o, null, maxEpoch);
+
+      // Vergessen (Tasmanien-Effekt): Fähigkeiten von Epochen, für die die Kulturträger nicht mehr reichen
+      for (let b = 0; b < SKILLS.length; b++) {
+        if ((o.learned.mask >> b) & 1 && SKILLS[b].epoch > maxEpoch && this.rng.chance(cfg.forgetRate)) o.learned.mask &= ~(1 << b);
+      }
+      if (o.learned.extra > 0 && carriers < EXTRA_MIN && this.rng.chance(cfg.forgetRate * 3)) {
+        o.learned.extra -= Math.ceil(o.learned.extra * 0.05);
+      }
 
       // Von Artgenossen lernen
       if (this.rng.chance(cfg.learnRate)) {
@@ -555,12 +627,14 @@ export class World {
           seen++;
           if (this.rng.int(seen) === 0) teacher = q; // zufälliges Vorbild (Reservoir-Auswahl)
         });
-        if (teacher) this.learnSomething(o, teacher);
+        if (teacher) this.learnSomething(o, teacher, maxEpoch);
       }
 
       // Landwirtschaft
       const harvest = this.crisis ? CRISES[this.crisis.kind].food : 1; // Missernten in Krisen
-      if (has(o.learned.mask, SKILL.landwirtschaft) && this.rng.chance(cfg.farmRate * harvest)) {
+      const machines = has(o.learned.mask, SKILL.maschinen) ? 2 : 1; // Maschinen: doppelte Ernte, doppelter Raubbau
+      if (has(o.learned.mask, SKILL.landwirtschaft)) farmers += machines;
+      if (has(o.learned.mask, SKILL.landwirtschaft) && this.rng.chance(cfg.farmRate * harvest * machines * landFactor)) {
         this.addFood(
           (o.x + this.rng.gauss() * 25 + cfg.width) % cfg.width,
           (o.y + this.rng.gauss() * 25 + cfg.height) % cfg.height,
@@ -569,19 +643,32 @@ export class World {
         );
       }
     }
+
+    this.farmPotential = farmers * cfg.farmRate;
+    // Übernutzung: Rodung senkt die Bodenfruchtbarkeit, die sich nur langsam erholt
+    this.fertility += cfg.regenRate * (1 - this.fertility) - cfg.clearRate * farmers;
+    this.fertility = Math.max(0.15, Math.min(1, this.fertility));
+    if (!this.overuseWarned && this.fertility < 0.5) {
+      this.overuseWarned = true;
+      this.addEvent('🪓 Raubbau');
+    }
   }
 
-  /** Neue Fähigkeit – selbst entdeckt (teacher = null) oder vom Vorbild gelernt. */
-  private learnSomething(o: Organism, teacher: Organism | null): void {
+  /**
+   * Neue Fähigkeit – selbst entdeckt (teacher = null) oder vom Vorbild gelernt.
+   * Entdecken wird mit jeder Epoche schwerer; weitere Erfindungen erst nach der Neuzeit mit genug Kulturträgern.
+   */
+  private learnSomething(o: Organism, teacher: Organism | null, maxEpoch: number): void {
     const mine = this.skillsOf(o);
-    let options = available(mine, false);
+    let options = available(mine, false, maxEpoch);
     if (teacher) {
       const theirs = this.skillsOf(teacher);
       options = options.filter((i) => has(theirs, i));
     }
     if (options.length) {
-      o.learned.mask |= 1 << options[this.rng.int(options.length)];
-    } else if (available(mine, false).length === 0 && (!teacher || teacher.learned.extra > o.learned.extra)) {
+      const pick = options[this.rng.int(options.length)];
+      if (teacher || this.rng.chance(1 / Math.pow(Math.max(1, SKILLS[pick].epoch), 1.5))) o.learned.mask |= 1 << pick;
+    } else if (this.carriers >= EXTRA_MIN && available(mine, false).length === 0 && (!teacher || teacher.learned.extra > o.learned.extra)) {
       o.learned.extra++;
     }
   }
@@ -628,13 +715,20 @@ export class World {
           travelled: 0,
           learned: this.inherit(o),
           group: 0,
+          infection: 0,
         });
       }
     }
     for (const b of babies) this.organisms.push(b);
     if (this.organisms.length < cfg.minPopulation) {
-      if (this.organisms.length === 0) this.addEvent('Ausgestorben – Urformen wandern ein');
-      while (this.organisms.length < cfg.minPopulation) this.spawn(primordialGenome(this.rng));
+      if (this.organisms.length === 0) this.addEvent(this.refugium.length ? 'Ausgestorben – Überlebende aus Refugien' : 'Ausgestorben – Urformen wandern ein');
+      while (this.organisms.length < cfg.minPopulation) {
+        // Neubesiedlung aus Refugien (ohne Kultur); nur am Anfang Urformen
+        const g = this.refugium.length
+          ? { ...mutate(this.refugium[this.rng.int(this.refugium.length)], this.rng, cfg.mutationRate), culture: false }
+          : primordialGenome(this.rng);
+        this.spawn(g);
+      }
     }
   }
 
@@ -658,6 +752,10 @@ export class World {
   /** Arten zählen und über die Zeit wiedererkennen (für Messlatte und Krisenbilanz). */
   private takeCensus(): void {
     const os = this.organisms.filter((o) => o.alive);
+    // Refugium auffrischen, solange es genug Leben gibt (Erbgut, das sich bewährt hat)
+    if (os.length >= 60 && this.tick >= 1000) {
+      this.refugium = Array.from({ length: 40 }, () => os[this.rng.int(os.length)].genome);
+    }
     const clusters = clusterSpecies(os.map((o) => o.genome));
     const sampledTotal = Math.min(os.length, 400) || 1;
     const scale = os.length / sampledTotal;
@@ -733,6 +831,31 @@ export class World {
     }
   }
 
+  /** Epoche der Kultur: höchste, aus der mindestens 30 % der Kulturträger etwas können. */
+  private updateEpoch(): number {
+    const carriers = this.organisms.filter((o) => o.genome.culture);
+    let e = 0;
+    if (carriers.length >= 3) {
+      for (let ep = 1; ep <= EPOCHS.length; ep++) {
+        const mask = SKILLS.reduce((m, d, i) => (d.epoch === ep ? m | (1 << i) : m), 0);
+        if (carriers.filter((o) => o.learned.mask & mask).length >= carriers.length * 0.3) e = ep;
+      }
+    }
+    // Wechsel erst, wenn die neue Epoche 3 Messungen in Folge besteht (kein Flackern)
+    if (e === this.epoch) { this.epochPending = null; return e; }
+    this.epochPending = this.epochPending?.e === e ? { e, n: this.epochPending.n + 1 } : { e, n: 1 };
+    if (this.epochPending.n < 3) return this.epoch;
+    if (e > this.epoch) {
+      if (e >= 2 || this.maxEpochReached < 1) this.addEvent(`${EPOCHS[e - 1].icon} ${EPOCHS[e - 1].name}`);
+    } else if (this.epoch >= 2) {
+      this.addEvent(e === 0 ? '📉 Kultur erloschen' : `📉 zurück: ${EPOCHS[e - 1].name}`);
+    }
+    this.maxEpochReached = Math.max(this.maxEpochReached, e);
+    this.epoch = e;
+    this.epochPending = null;
+    return e;
+  }
+
   /** Kipppunkt: ≥ 10 % Kulturträger mit Ø ≥ 5 Fähigkeiten, 5 Messungen in Folge. */
   private detectTipping(s: Sample): void {
     if (this.tippingTick !== null) return;
@@ -746,8 +869,9 @@ export class World {
   private record(): void {
     const os = this.organisms;
     const n = os.length || 1;
-    let pred = 0, s = 0, v = 0, e = 0, d = 0, sk = 0, cult = 0, cultSk = 0, maxSk = 0, ready = 0;
+    let pred = 0, s = 0, v = 0, e = 0, d = 0, sk = 0, cult = 0, cultSk = 0, maxSk = 0, ready = 0, sick = 0;
     for (const o of os) {
+      if (o.infection === 1) sick++;
       const k = this.skillCount(o);
       sk += k;
       if (k > maxSk) maxSk = k;
@@ -775,6 +899,9 @@ export class World {
       maxSkills: maxSk,
       kickReady: ready,
       crisis: this.crisis?.kind ?? null,
+      fertility: this.fertility,
+      infected: sick / n,
+      epoch: this.updateEpoch(),
     };
     this.samples.push(sample);
     this.detectTipping(sample);

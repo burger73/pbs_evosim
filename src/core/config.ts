@@ -9,7 +9,7 @@ export type Mode = 'natur' | 'schiedsrichter';
 export type Fitness = 'futter' | 'rot' | 'groesse' | 'strecke';
 
 /** Krisen, die per Button (oder zufällig) ausgelöst werden. */
-export type CrisisKind = 'eiszeit' | 'duerre' | 'vulkan';
+export type CrisisKind = 'eiszeit' | 'duerre' | 'vulkan' | 'seuche';
 
 export interface CrisisDef {
   label: string;
@@ -30,6 +30,7 @@ export const CRISES: Record<CrisisKind, CrisisDef> = {
   eiszeit: { label: 'Eiszeit', icon: '❄️', duration: 1500, food: 0.4, cold: 1, shock: 0, decay: 0, tint: 'rgba(120,170,255,0.16)' },
   duerre: { label: 'Dürre', icon: '☀️', duration: 1000, food: 0.15, cold: 0, shock: 0, decay: 0.01, tint: 'rgba(240,190,60,0.16)' },
   vulkan: { label: 'Vulkanwinter', icon: '🌋', duration: 800, food: 0.1, cold: 1.5, shock: 0.3, decay: 0.005, tint: 'rgba(90,90,90,0.22)' },
+  seuche: { label: 'Seuche', icon: '🦠', duration: 900, food: 1, cold: 0, shock: 0, decay: 0, tint: 'rgba(140,200,90,0.14)' },
 };
 
 export const FITNESS_LABELS: Record<Fitness, string> = {
@@ -89,6 +90,27 @@ export interface SimConfig {
   /** Energiekosten der Kälte pro Tick und Flächeneinheit (in Kältekrisen). */
   coldCost: number;
   randomCrises: boolean;
+
+  /** Seuche: Anteil anfangs Infizierter, Sterbe-Wahrscheinlichkeit pro Tick, Ansteckung pro Nachbar und Tick, Reichweite, Genesung. */
+  diseaseStart: number;
+  diseaseMortality: number;
+  infectRate: number;
+  infectRadius: number;
+  recoverRate: number;
+
+  /**
+   * Komplexitätskosten (Tainter): jede erlernte Fähigkeit ab der fünften kostet Energie pro Tick,
+   * weitere Erfindungen gedämpft (logarithmisch). Komplexe Kulturen brauchen viel Energie – und sind in Krisen verwundbar.
+   */
+  complexityCost: number;
+  /** Ackerland: höchstens so viele Futterstücke pro Tick kann Landwirtschaft insgesamt erzeugen (× Bodenfruchtbarkeit). */
+  landCapacity: number;
+  /** Wahrscheinlichkeit pro Tick, eine Fähigkeit zu vergessen, deren Epoche mangels Kulturträgern nicht mehr gehalten werden kann. */
+  forgetRate: number;
+
+  /** Übernutzung: jeder Ackerbauer senkt die Bodenfruchtbarkeit um clearRate pro Tick; Erholung regenRate · (1 − Fruchtbarkeit). */
+  clearRate: number;
+  regenRate: number;
 
   /**
    * Kultur-Anschwung 0..100: wie wahrscheinlich der glückliche „Kick“ ist (Harari).
@@ -157,13 +179,25 @@ export function defaultConfig(): SimConfig {
     coldCost: 0.05,
     randomCrises: false,
 
+    diseaseStart: 0.03,
+    diseaseMortality: 0.003,
+    infectRate: 0.02,
+    infectRadius: 25,
+    recoverRate: 0.004,
+
+    complexityCost: 0.01,
+    landCapacity: 5,
+    forgetRate: 0.003,
+    clearRate: 2.5e-7,
+    regenRate: 2e-4,
+
     cultureBoost: 50,
     kickMinSkills: 3,
     cultureCost: 0.015,
     discoveryRate: 0.004,
     learnRate: 0.05,
     transmission: 0.85,
-    farmRate: 0.05,
+    farmRate: 0.01,
 
     generationTicks: 400,
     judgePopulation: 150,

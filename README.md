@@ -11,9 +11,14 @@ und vererbtem Gehirn (winziges neuronales Netz). Niemand programmiert ihr Verhal
   Ob sie sich durchsetzt, hängt davon ab, ob genug Artgenossen zum Lernen da sind (Henrichs „kollektives Gehirn“).
   Kulturträger entdecken, lernen und vererben Wissen: 🔥 Feuer, 🧥 Kleidung, ⚔️ Waffen, 🛖 Hütte, 🌾 Landwirtschaft,
   ⚕️ Medizin, 📜 Schrift, danach endlos weitere Erfindungen. Regler „Kultur-Anschwung“ = wie viel Glück.
-- **Krisen:** ❄️ Eiszeit, ☀️ Dürre, 🌋 Vulkanwinter (oder zufällig). Nach jeder Krise eine Bilanz: Überleben nach Zahl
-  der Fähigkeiten – Widerstandskraft wird gemessen, nicht vorausgesetzt.
-- **Messlatte:** Fähigkeiten je Art über die Zeit (logarithmisch); Kipppunkt-Erkennung der Kultur.
+- **Epochen:** Steinzeit → Sesshaftigkeit (ab 50 Kulturträgern) → Hochkultur (150) → Neuzeit (300), jede schwerer
+  zu entdecken. Schrumpft die Kultur, vergisst sie die Fähigkeiten dieser Epoche (Tasmanien-Effekt).
+- **Grenzen der Kultur:** Komplexitätskosten (Tainter), Ackerland × Bodenfruchtbarkeit begrenzt die Ernte,
+  Landwirtschaft laugt den Boden aus (Raubbau), überschüssige Energie verfällt (Vorrat verdreifacht den Speicher).
+- **Krisen:** ❄️ Eiszeit, ☀️ Dürre, 🌋 Vulkanwinter, 🦠 Seuche (Ansteckung über Nähe, Medizin halbiert die
+  Sterblichkeit) – per Button oder zufällig. Nach einem Massenaussterben besiedeln Überlebende aus Refugien die Welt neu.
+- **Bilanz & Messlatte:** Nach jeder Krise Überleben nach Zahl der Fähigkeiten (gemessen, nicht vorausgesetzt);
+  Fähigkeiten je Art über die Zeit (logarithmisch), 🏆 Spitzenreiter, Kipppunkt-Erkennung.
 - **Schiedsrichter:** Ein festgelegtes Kriterium entscheidet nach jeder Generation, wer sich fortpflanzt –
   z. B. „wer am rötesten ist“. Die Population wird rot, obwohl Röte fürs Überleben nichts bringt.
 
