@@ -1,6 +1,6 @@
-import { CRISES } from '../core/config.ts';
-import { GENETIC_MASK, popcount } from '../core/skills.ts';
-import type { Census, Organism, Sample, SimEvent, World } from '../core/world.ts';
+import { CRISES, type SimConfig } from '../core/config.ts';
+import type { Census, Sample, SimEvent } from '../core/types.ts';
+import { F_CULTURE, F_PICKED, F_PRED, F_SICK, ORG_STRIDE, O_FLAGS, O_GSKILLS, O_HUE, O_R, O_X, O_Y, type Snapshot } from '../sim/protocol.ts';
 
 export const css = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
@@ -16,36 +16,42 @@ export function fitCanvas(canvas: HTMLCanvasElement, worldW?: number): number {
   return worldW ? w / worldW : dpr;
 }
 
-/** inPicked: gehört das Lebewesen zur hervorgehobenen Art? (null = keine Hervorhebung) */
-export function drawWorld(canvas: HTMLCanvasElement, world: World, selected: Organism | null, zoom = 1, inPicked: ((o: Organism) => boolean) | null = null): void {
+/** Welt zeichnen – aus der Momentaufnahme des Workers. highlight: eine Art ist ausgewählt (andere blass). */
+export function drawWorld(canvas: HTMLCanvasElement, cfg: SimConfig, snap: Snapshot, zoom = 1, highlight = false): void {
   const ctx = canvas.getContext('2d')!;
-  const k = fitCanvas(canvas, world.cfg.width);
+  const k = fitCanvas(canvas, cfg.width);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  if (world.crisis) {
-    ctx.fillStyle = CRISES[world.crisis.kind].tint;
+  if (snap.crisis) {
+    ctx.fillStyle = CRISES[snap.crisis.kind].tint;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
 
   // Futter: Oberfläche grün, vergraben braun
-  const fr = Math.max(1, world.cfg.foodRadius * k);
+  const fr = Math.max(1, cfg.foodRadius * k);
   const surface = css('--food'), buried = css('--buried');
-  for (let i = 0; i < world.foodX.length; i++) {
-    ctx.fillStyle = world.foodBuried[i] ? buried : surface;
-    ctx.fillRect(world.foodX[i] * k - fr / 2, world.foodY[i] * k - fr / 2, fr, fr);
+  const food = snap.food;
+  for (let i = 0; i < food.length; i += 3) {
+    ctx.fillStyle = food[i + 2] ? buried : surface;
+    ctx.fillRect(food[i] * k - fr / 2, food[i + 1] * k - fr / 2, fr, fr);
   }
 
   // Lebewesen
   const predColor = css('--pred');
   const cultColor = css('--cult');
-  for (const o of world.organisms) {
-    ctx.globalAlpha = inPicked && !inPicked(o) ? 0.15 : 1;
-    const r = world.radius(o) * k * zoom;
-    const x = o.x * k, y = o.y * k;
-    const pred = world.isPredator(o) && !o.genome.culture;
+  const sickColor = css('--sick');
+  const orgs = snap.orgs;
+  let anyPicked = false;
+  if (highlight) for (let i = O_FLAGS; i < orgs.length; i += ORG_STRIDE) if (orgs[i] & F_PICKED) { anyPicked = true; break; }
+  for (let i = 0; i < orgs.length; i += ORG_STRIDE) {
+    const flags = orgs[i + O_FLAGS];
+    ctx.globalAlpha = anyPicked && !(flags & F_PICKED) ? 0.15 : 1;
+    const r = orgs[i + O_R] * k * zoom;
+    const x = orgs[i + O_X] * k, y = orgs[i + O_Y] * k;
+    const pred = (flags & F_PRED) !== 0;
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fillStyle = `hsl(${o.genome.hue} 65% ${pred ? 42 : 52}%)`;
+    ctx.fillStyle = `hsl(${orgs[i + O_HUE]} 65% ${pred ? 42 : 52}%)`;
     ctx.fill();
     if (pred) {
       ctx.lineWidth = Math.max(1.5, r * 0.25);
@@ -53,7 +59,7 @@ export function drawWorld(canvas: HTMLCanvasElement, world: World, selected: Org
       ctx.stroke();
     }
     // Genetische Fähigkeiten: heller Punkt in der Mitte, größer je mehr
-    const g = popcount(o.genome.skills & GENETIC_MASK);
+    const g = orgs[i + O_GSKILLS];
     if (g > 0) {
       ctx.beginPath();
       ctx.arc(x, y, Math.max(1, r * (0.2 + 0.1 * g)), 0, Math.PI * 2);
@@ -61,15 +67,15 @@ export function drawWorld(canvas: HTMLCanvasElement, world: World, selected: Org
       ctx.fill();
     }
     // Kranke: grünlicher Rand
-    if (o.infection === 1) {
+    if (flags & F_SICK) {
       ctx.beginPath();
       ctx.arc(x, y, r + 1 * k, 0, Math.PI * 2);
       ctx.lineWidth = Math.max(1.5, 1.5 * k);
-      ctx.strokeStyle = css('--sick');
+      ctx.strokeStyle = sickColor;
       ctx.stroke();
     }
     // Kulturträger: goldener Ring
-    if (o.genome.culture) {
+    if (flags & F_CULTURE) {
       ctx.beginPath();
       ctx.arc(x, y, r + 2 * k, 0, Math.PI * 2);
       ctx.lineWidth = Math.max(1.5, 2 * k);
@@ -79,17 +85,18 @@ export function drawWorld(canvas: HTMLCanvasElement, world: World, selected: Org
   }
   ctx.globalAlpha = 1;
 
-  if (selected && selected.alive) {
-    const x = selected.x * k, y = selected.y * k;
+  const sel = snap.selected;
+  if (sel && sel.alive) {
+    const x = sel.x * k, y = sel.y * k;
     ctx.setLineDash([4 * k, 4 * k]);
     ctx.lineWidth = Math.max(1, k);
     ctx.strokeStyle = css('--accent');
     ctx.beginPath();
-    ctx.arc(x, y, world.senseRadius(selected) * k, 0, Math.PI * 2);
+    ctx.arc(x, y, sel.senseR * k, 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.beginPath();
-    ctx.arc(x, y, world.radius(selected) * k + 5 * k, 0, Math.PI * 2);
+    ctx.arc(x, y, sel.r * k + 5 * k, 0, Math.PI * 2);
     ctx.lineWidth = 2 * k;
     ctx.stroke();
   }

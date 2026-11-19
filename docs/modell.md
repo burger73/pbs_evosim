@@ -125,7 +125,7 @@ gelten Arten, die einmal mindestens 30 Individuen hatten oder Spitzenreiter ware
 
 ## Qualitätssicherung
 
-- `npm test`: Regeltests (`test/core.test.ts`) und **Golden Master** (`test/golden.test.ts`). Feste Szenarien
+- `npm test`: Regeltests (`test/core.test.ts`), Worker-Schicht (`test/host.test.ts`: rechnet bitgenau wie die Welt direkt, Listen lückenlos) und **Golden Master** (`test/golden.test.ts`). Feste Szenarien
   liefern einen bitgenauen Fingerabdruck. Reines Umstrukturieren darf ihn nicht ändern. Bei absichtlicher
   Verhaltensänderung wird er mit `npx vitest run -u test/golden.test.ts` erneuert und im Commit begründet.
 - `npm run test:szenarien`: Gesamtverhalten über 5 Seeds (etwa 2,5 Minuten). Geprüft wird: Das Leben stirbt
