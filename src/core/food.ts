@@ -5,6 +5,7 @@
 import type { SimConfig } from './config.ts';
 import { Grid } from './grid.ts';
 import type { Rng } from './rng.ts';
+import { LAND, type Terrain } from './terrain.ts';
 
 export class FoodField {
   readonly x: number[] = [];
@@ -15,12 +16,14 @@ export class FoodField {
   readonly grid: Grid;
   private readonly cfg: SimConfig;
   private readonly rng: Rng;
+  private readonly terrain: Terrain;
   private acc = 0;
   private buriedCount = 0;
 
-  constructor(cfg: SimConfig, rng: Rng) {
+  constructor(cfg: SimConfig, rng: Rng, terrain: Terrain) {
     this.cfg = cfg;
     this.rng = rng;
+    this.terrain = terrain;
     this.grid = new Grid(cfg.width, cfg.height, 40);
   }
 
@@ -36,6 +39,11 @@ export class FoodField {
     const b = buried ?? this.rng.chance(this.cfg.buriedShare);
     const cap = b ? limit * this.cfg.buriedShare : limit * (1 - this.cfg.buriedShare);
     if ((b ? this.buriedCount : this.x.length - this.buriedCount) >= cap) return;
+    if (this.cfg.terrain) {
+      // Futter wächst nur auf fruchtbarem Land (nicht im Wasser, nicht im Gebirge)
+      if (x === undefined || y === undefined) [x, y] = this.terrain.randomLand(this.rng);
+      else if (this.terrain.typeAt(x, y) !== LAND) return;
+    }
     this.x.push(x ?? this.rng.range(0, this.cfg.width));
     this.y.push(y ?? this.rng.range(0, this.cfg.height));
     this.buried.push(b);

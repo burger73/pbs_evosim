@@ -7,7 +7,7 @@ import {
   type Census, type CrisisReport, type ExtinctSpecies, type Sample, type SimEvent, type SpeciesStat,
 } from '../core/types.ts';
 import type { PlannedAction, Snapshot, ToWorker } from '../sim/protocol.ts';
-import { css, drawChart, drawSpeciesChart, drawWorld } from './render.ts';
+import { css, drawChart, drawSpeciesChart, drawWorld, setTerrain } from './render.ts';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -102,6 +102,7 @@ sim.onmessage = (ev: MessageEvent<Snapshot>) => {
   const s = ev.data;
   if (s.reset) {
     view.samples = []; view.census = []; view.events = []; view.extinct = []; view.reports = [];
+    setTerrain(s.terrain);
   }
   view.samples.push(...s.newSamples);
   view.census.push(...s.newCensus);

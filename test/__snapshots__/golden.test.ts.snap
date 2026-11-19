@@ -1,6 +1,6 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`Golden Master > Natur: Augen für alle, Dürre und Vulkan (Seed 3) 1`] = `
+exports[`Golden Master – frühere Welt ohne Gelände (muss bitgenau gleich bleiben) > Natur: Augen für alle, Dürre und Vulkan (Seed 3) 1`] = `
 {
   "avgSkills": 1.105263,
   "cultureShare": 0,
@@ -16,7 +16,7 @@ exports[`Golden Master > Natur: Augen für alle, Dürre und Vulkan (Seed 3) 1`] 
 }
 `;
 
-exports[`Golden Master > Natur: Kultur, Eiszeit und Seuche (Seed 8) 1`] = `
+exports[`Golden Master – frühere Welt ohne Gelände (muss bitgenau gleich bleiben) > Natur: Kultur, Eiszeit und Seuche (Seed 8) 1`] = `
 {
   "avgSkills": 14.940887,
   "cultureShare": 0.995074,
@@ -32,7 +32,7 @@ exports[`Golden Master > Natur: Kultur, Eiszeit und Seuche (Seed 8) 1`] = `
 }
 `;
 
-exports[`Golden Master > Schiedsrichter: „Wer am größten ist“ 1`] = `
+exports[`Golden Master – frühere Welt ohne Gelände (muss bitgenau gleich bleiben) > Schiedsrichter: „Wer am größten ist“ 1`] = `
 {
   "avgSkills": 0.02,
   "cultureShare": 0,

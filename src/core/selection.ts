@@ -3,6 +3,7 @@
  * wählt am Generationsende das Kriterium die Eltern aus.
  */
 import { mutate, primordialGenome } from './genome.ts';
+import { WATER } from './terrain.ts';
 import { fitness, maxAge } from './traits.ts';
 import type { Organism } from './types.ts';
 import type { World } from './world.ts';
@@ -39,6 +40,9 @@ export function naturalSelection(w: World): void {
         group: 0,
         infection: 0,
       });
+      // Ein Kind, das neben dem Ufer im Wasser landen würde, bleibt beim Elternteil
+      const b = babies[babies.length - 1];
+      if (cfg.terrain && w.terrain.typeAt(b.x, b.y) === WATER) { b.x = o.x; b.y = o.y; }
     }
   }
   for (const b of babies) w.organisms.push(b);
