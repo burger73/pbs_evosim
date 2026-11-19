@@ -78,6 +78,8 @@ export class World {
   get epoch() { return this.cultureSystem.epoch; }
   get firstSpark() { return this.cultureSystem.firstSpark; }
   get tippingTick() { return this.cultureSystem.tippingTick; }
+  /** Lebende Kulturlinien (Stand der letzten Messung). */
+  get cultureLines() { return [...this.cultureSystem.lines.values()]; }
 
   radius(o: Organism): number { return T.radius(this.cfg, o); }
   senseRadius(o: Organism): number { return T.senseRadius(this.cfg, o); }
@@ -163,6 +165,7 @@ export class World {
   // --- Statistik ---------------------------------------------------------------
 
   private record(): void {
+    this.cultureSystem.measure(this); // Kulturlinien: Epochen, Kipppunkte
     const os = this.organisms;
     const n = os.length || 1;
     let pred = 0, s = 0, v = 0, e = 0, d = 0, sk = 0, cult = 0, cultSk = 0, maxSk = 0, ready = 0, sick = 0;
@@ -197,10 +200,9 @@ export class World {
       crisis: this.crisis?.kind ?? null,
       fertility: this.fertility,
       infected: sick / n,
-      epoch: this.cultureSystem.updateEpoch(this),
+      epoch: this.cultureSystem.epoch,
     };
     this.samples.push(sample);
-    this.cultureSystem.detectTipping(this, sample);
     if (this.samples.length > MAX_SAMPLES) this.samples.splice(0, this.samples.length - MAX_SAMPLES);
   }
 }

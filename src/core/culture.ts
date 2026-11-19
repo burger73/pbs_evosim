@@ -1,56 +1,87 @@
 /**
  * Kultur: der seltene Kick (Harari), Entdecken, Lernen von Artgenossen, Vergessen (Tasmanien-Effekt,
  * Henrich), Landwirtschaft mit Raubbau, Epochen und Kipppunkt.
+ *
+ * Kulturlinien: Jeder Kick gründet eine Linie; Kinder erben ihre Nummer mit der Kulturfähigkeit.
+ * Gelernt wird nur innerhalb der eigenen Linie, und jede Linie hat ihre eigene Epoche und ihren
+ * eigenen Kipppunkt – „kollektives Gehirn“ heißt: die Köpfe der eigenen Kultur zählen.
+ * So können getrennte Kulturen (etwa auf verschiedenen Kontinenten) verschieden weit kommen.
  */
 import { CRISES, kickRate } from './config.ts';
-import { hueDistance } from './genome.ts';
 import { EPOCHS, EXTRA_MIN, SKILL, SKILLS, available, epochFor, has, nothingLearned, type Learned } from './skills.ts';
 import { kickReady, skillCount, skillsOf } from './traits.ts';
-import { TIPPING_SHARE, TIPPING_SKILLS, type Organism, type Sample } from './types.ts';
+import { TIPPING_SHARE, TIPPING_SKILLS, type Organism } from './types.ts';
 import type { World } from './world.ts';
+
+/** Zustand einer Kulturlinie. */
+export interface CultureLine {
+  id: number;
+  /** Schritt des gründenden Kicks. */
+  founded: number;
+  /** Kulturträger bei der letzten Zählung. */
+  carriers: number;
+  /** Ø Fähigkeiten der Kulturträger bei der letzten Messung. */
+  skills: number;
+  /** Erreichte Epoche (0 = keine). */
+  epoch: number;
+  maxEpoch: number;
+  tippingTick: number | null;
+  /** Kontinent, auf dem die meisten Träger leben (−1 = unbekannt/Wasser). */
+  home: number;
+  epochPending: { e: number; n: number } | null;
+  tippingStreak: number;
+}
 
 export class CultureSystem {
   /** Bodenfruchtbarkeit (Übernutzung durch Landwirtschaft). */
   fertility = 1;
-  /** Erreichte Epoche der Kultur (0 = keine). */
-  epoch = 0;
-  /** Erster Kick (Funke) und Kipppunkt der Kultur. */
+  /** Lebende (und bis zur nächsten Messung zuletzt gesehene) Kulturlinien. */
+  lines = new Map<number, CultureLine>();
+  /** Erster Kick (Funke) und erster Kipppunkt irgendeiner Linie. */
   firstSpark: number | null = null;
   tippingTick: number | null = null;
 
-  private carriers = 0;
+  /** Kulturträger je Linie im aktuellen Schritt (für Epochen-Grenzen und Erfindungen). */
+  private carriersByLine = new Map<number, number>();
+  private nextLine = 1;
   /** Ernte-Potenzial aller Bauern im letzten Tick (für die Begrenzung durch das Ackerland). */
   private farmPotential = 0;
-  private epochPending: { e: number; n: number } | null = null;
-  private maxEpochReached = 0;
   private overuseWarned = false;
-  private tippingStreak = 0;
   private lastSparkEvent = -Infinity;
+  private stoneAgeShown = false;
 
-  /**
-   * Der Kick (Harari): seltener Glücksfall, nur bei genug genetischen Fähigkeiten (Bedingung b).
-   * Kulturträger entdecken, lernen von Artgenossen (Bedingung a wirkt von selbst: ohne
-   * Nachbarn kein Lernen) und betreiben Landwirtschaft.
-   */
+  /** Höchste Epoche aller Linien (für Statistik und Anzeige). */
+  get epoch(): number {
+    let e = 0;
+    for (const l of this.lines.values()) e = Math.max(e, l.epoch);
+    return e;
+  }
+
   step(w: World): void {
     const cfg = w.cfg;
     const rng = w.rng;
     const organisms = w.organisms;
     const kp = kickRate(cfg.cultureBoost);
+    const byLine = this.carriersByLine;
+    byLine.clear();
     let carriers = 0;
     let farmers = 0;
-    for (const o of organisms) if (o.alive && o.genome.culture) carriers++;
-    this.carriers = carriers;
-    const maxEpoch = epochFor(carriers);
+    for (const o of organisms) {
+      if (!o.alive || !o.genome.culture) continue;
+      carriers++;
+      byLine.set(o.genome.line, (byLine.get(o.genome.line) ?? 0) + 1);
+    }
     // Ackerland begrenzt die Gesamternte: mehr Bauern auf demselben Land bringen nicht mehr
     const landFactor = this.farmPotential > 0 ? Math.min(1, (cfg.landCapacity * this.fertility) / this.farmPotential) : 1;
     for (let idx = 0; idx < organisms.length; idx++) {
       const o = organisms[idx];
       if (!o.alive) continue;
 
-      // Kick
+      // Kick: gründet eine neue Kulturlinie
       if (kp > 0 && kickReady(cfg, o) && rng.chance(kp)) {
         o.genome.culture = true;
+        o.genome.line = this.nextLine++;
+        byLine.set(o.genome.line, 1);
         if (this.firstSpark === null) this.firstSpark = w.tick;
         if (carriers === 0 && w.tick - this.lastSparkEvent > 300) {
           w.addEvent('Funke');
@@ -60,32 +91,34 @@ export class CultureSystem {
       }
       if (!o.genome.culture) continue;
       const n = skillCount(o);
+      const mine = byLine.get(o.genome.line) ?? 0;
+      const maxEpoch = epochFor(mine);
 
       // Entdecken: je mehr man kann, desto eher (Wissen kombiniert sich); Wissenschaft verdoppelt
       const sci = has(o.learned.mask, SKILL.wissenschaft) ? 2 : 1;
-      if (rng.chance(cfg.discoveryRate * (1 + 0.2 * n) * sci)) this.learnSomething(w, o, null, maxEpoch);
+      if (rng.chance(cfg.discoveryRate * (1 + 0.2 * n) * sci)) this.learnSomething(w, o, null, maxEpoch, mine);
 
-      // Vergessen (Tasmanien-Effekt): Fähigkeiten von Epochen, für die die Kulturträger nicht mehr reichen
+      // Vergessen (Tasmanien-Effekt): Fähigkeiten von Epochen, für die die eigene Linie zu klein ist
       for (let b = 0; b < SKILLS.length; b++) {
         if ((o.learned.mask >> b) & 1 && SKILLS[b].epoch > maxEpoch && rng.chance(cfg.forgetRate)) o.learned.mask &= ~(1 << b);
       }
-      if (o.learned.extra > 0 && carriers < EXTRA_MIN && rng.chance(cfg.forgetRate * 3)) {
+      if (o.learned.extra > 0 && mine < EXTRA_MIN && rng.chance(cfg.forgetRate * 3)) {
         o.learned.extra -= Math.ceil(o.learned.extra * 0.05);
       }
 
-      // Von Artgenossen lernen
+      // Von Artgenossen der eigenen Linie lernen
       if (rng.chance(cfg.learnRate)) {
         const range = has(o.learned.mask, SKILL.schrift) ? 180 : 60;
         let teacher = null as Organism | null;
         let seen = 0;
         w.orgGrid.forEachNear(o.x, o.y, range, (qi) => {
           const q = organisms[qi];
-          if (q === o || !q.alive || !q.genome.culture || hueDistance(q.genome.hue, o.genome.hue) > 40) return;
+          if (q === o || !q.alive || !q.genome.culture || q.genome.line !== o.genome.line) return;
           if (skillCount(q) <= n) return;
           seen++;
           if (rng.int(seen) === 0) teacher = q; // zufälliges Vorbild (Reservoir-Auswahl)
         });
-        if (teacher) this.learnSomething(w, o, teacher, maxEpoch);
+        if (teacher) this.learnSomething(w, o, teacher, maxEpoch, mine);
       }
 
       // Landwirtschaft
@@ -114,9 +147,9 @@ export class CultureSystem {
 
   /**
    * Neue Fähigkeit – selbst entdeckt (teacher = null) oder vom Vorbild gelernt.
-   * Entdecken wird mit jeder Epoche schwerer; weitere Erfindungen erst nach der Neuzeit mit genug Kulturträgern.
+   * Entdecken wird mit jeder Epoche schwerer; weitere Erfindungen erst nach der Neuzeit mit genug Trägern der eigenen Linie.
    */
-  private learnSomething(w: World, o: Organism, teacher: Organism | null, maxEpoch: number): void {
+  private learnSomething(w: World, o: Organism, teacher: Organism | null, maxEpoch: number, lineCarriers: number): void {
     const mine = skillsOf(o);
     let options = available(mine, false, maxEpoch);
     if (teacher) {
@@ -126,7 +159,7 @@ export class CultureSystem {
     if (options.length) {
       const pick = options[w.rng.int(options.length)];
       if (teacher || w.rng.chance(1 / Math.pow(Math.max(1, SKILLS[pick].epoch), 1.5))) o.learned.mask |= 1 << pick;
-    } else if (this.carriers >= EXTRA_MIN && available(mine, false).length === 0 && (!teacher || teacher.learned.extra > o.learned.extra)) {
+    } else if (lineCarriers >= EXTRA_MIN && available(mine, false).length === 0 && (!teacher || teacher.learned.extra > o.learned.extra)) {
       o.learned.extra++;
     }
   }
@@ -142,38 +175,83 @@ export class CultureSystem {
     return { mask, extra };
   }
 
-  /** Epoche der Kultur: höchste, aus der mindestens 30 % der Kulturträger etwas können. */
-  updateEpoch(w: World): number {
-    const carriers = w.organisms.filter((o) => o.genome.culture);
-    let e = 0;
-    if (carriers.length >= 3) {
-      for (let ep = 1; ep <= EPOCHS.length; ep++) {
-        const mask = SKILLS.reduce((m, d, i) => (d.epoch === ep ? m | (1 << i) : m), 0);
-        if (carriers.filter((o) => o.learned.mask & mask).length >= carriers.length * 0.3) e = ep;
+  /**
+   * Messung (alle 10 Schritte): je Linie Träger, Ø Fähigkeiten, Heimat-Kontinent, Epoche
+   * (höchste, aus der ≥ 30 % der Träger etwas können; Wechsel nach 3 Messungen in Folge) und Kipppunkt
+   * (Träger ≥ 10 % der Population mit Ø ≥ 5 Fähigkeiten, 5 Messungen in Folge).
+   */
+  measure(w: World): void {
+    const groups = new Map<number, Organism[]>();
+    for (const o of w.organisms) {
+      if (!o.genome.culture) continue;
+      const g = groups.get(o.genome.line);
+      if (g) g.push(o); else groups.set(o.genome.line, [o]);
+    }
+    const pop = w.organisms.length || 1;
+    const multi = groups.size > 1 || [...this.lines.keys()].some((id) => !groups.has(id));
+    for (const [id, members] of groups) {
+      let line = this.lines.get(id);
+      if (!line) {
+        line = { id, founded: w.tick, carriers: 0, skills: 0, epoch: 0, maxEpoch: 0, tippingTick: null, home: -1, epochPending: null, tippingStreak: 0 };
+        this.lines.set(id, line);
       }
+      line.carriers = members.length;
+      let sk = 0;
+      const homes = new Map<number, number>();
+      for (const o of members) {
+        sk += skillCount(o);
+        const r = w.terrain.regionAt(o.x, o.y);
+        homes.set(r, (homes.get(r) ?? 0) + 1);
+      }
+      line.skills = sk / members.length;
+      line.home = [...homes].reduce((a, b) => (b[1] > a[1] ? b : a))[0];
+      this.updateEpoch(w, line, members, multi);
+      this.detectTipping(w, line, pop, multi);
     }
-    // Wechsel erst, wenn die neue Epoche 3 Messungen in Folge besteht (kein Flackern)
-    if (e === this.epoch) { this.epochPending = null; return e; }
-    this.epochPending = this.epochPending?.e === e ? { e, n: this.epochPending.n + 1 } : { e, n: 1 };
-    if (this.epochPending.n < 3) return this.epoch;
-    if (e > this.epoch) {
-      if (e >= 2 || this.maxEpochReached < 1) w.addEvent(`${EPOCHS[e - 1].icon} ${EPOCHS[e - 1].name}`);
-    } else if (this.epoch >= 2) {
-      w.addEvent(e === 0 ? '📉 Kultur erloschen' : `📉 zurück: ${EPOCHS[e - 1].name}`);
+    // Erloschene Linien
+    for (const [id, line] of this.lines) {
+      if (groups.has(id)) continue;
+      if (line.maxEpoch >= 2) w.addEvent(`📉 Kultur erloschen${this.tag(line, true)}`);
+      this.lines.delete(id);
     }
-    this.maxEpochReached = Math.max(this.maxEpochReached, e);
-    this.epoch = e;
-    this.epochPending = null;
-    return e;
   }
 
-  /** Kipppunkt: ≥ 10 % Kulturträger mit Ø ≥ 5 Fähigkeiten, 5 Messungen in Folge. */
-  detectTipping(w: World, s: Sample): void {
-    if (this.tippingTick !== null) return;
-    this.tippingStreak = s.cultureShare >= TIPPING_SHARE && s.cultureSkills >= TIPPING_SKILLS ? this.tippingStreak + 1 : 0;
-    if (this.tippingStreak >= 5) {
-      this.tippingTick = w.tick;
-      w.addEvent('⚡ Kultur kippt');
+  /** „(Linie 3)“ – nur wenn es mehrere Linien gibt oder gab. */
+  private tag(line: CultureLine, multi: boolean): string {
+    return multi || this.lines.size > 1 ? ` (Linie ${line.id})` : '';
+  }
+
+  private updateEpoch(w: World, line: CultureLine, members: Organism[], multi: boolean): void {
+    let e = 0;
+    if (members.length >= 3) {
+      for (let ep = 1; ep <= EPOCHS.length; ep++) {
+        const mask = SKILLS.reduce((m, d, i) => (d.epoch === ep ? m | (1 << i) : m), 0);
+        if (members.filter((o) => o.learned.mask & mask).length >= members.length * 0.3) e = ep;
+      }
+    }
+    if (e === line.epoch) { line.epochPending = null; return; }
+    line.epochPending = line.epochPending?.e === e ? { e, n: line.epochPending.n + 1 } : { e, n: 1 };
+    if (line.epochPending.n < 3) return;
+    if (e > line.epoch) {
+      // Steinzeit nur einmal melden (für die erste Linie) – sonst meldet jeder kleine Funke seine Steinzeit
+      if (e >= 2 ? e > line.maxEpoch : !this.stoneAgeShown) w.addEvent(`${EPOCHS[e - 1].icon} ${EPOCHS[e - 1].name}${e >= 2 ? this.tag(line, multi) : ''}`);
+      if (e >= 1) this.stoneAgeShown = true;
+    } else if (line.epoch >= 2 && e >= 1) {
+      // „erloschen“ meldet erst measure(), wenn wirklich kein Träger mehr lebt
+      w.addEvent(`📉 zurück: ${EPOCHS[e - 1].name}${this.tag(line, multi)}`);
+    }
+    line.maxEpoch = Math.max(line.maxEpoch, e);
+    line.epoch = e;
+    line.epochPending = null;
+  }
+
+  private detectTipping(w: World, line: CultureLine, pop: number, multi: boolean): void {
+    if (line.tippingTick !== null) return;
+    line.tippingStreak = line.carriers / pop >= TIPPING_SHARE && line.skills >= TIPPING_SKILLS ? line.tippingStreak + 1 : 0;
+    if (line.tippingStreak >= 5) {
+      line.tippingTick = w.tick;
+      if (this.tippingTick === null) this.tippingTick = w.tick;
+      w.addEvent(`⚡ Kultur kippt${this.tag(line, multi)}`);
     }
   }
 }

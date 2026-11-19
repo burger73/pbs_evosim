@@ -3,6 +3,7 @@
  * wählt am Generationsende das Kriterium die Eltern aus.
  */
 import { mutate, primordialGenome } from './genome.ts';
+import { nothingLearned } from './skills.ts';
 import { WATER } from './terrain.ts';
 import { fitness, maxAge } from './traits.ts';
 import type { Organism } from './types.ts';
@@ -40,8 +41,10 @@ export function naturalSelection(w: World): void {
         group: 0,
         infection: 0,
       });
-      // Ein Kind, das neben dem Ufer im Wasser landen würde, bleibt beim Elternteil
       const b = babies[babies.length - 1];
+      // Wer durch Mutation die Kulturfähigkeit verloren hat, kann auch kein Wissen übernehmen
+      if (!b.genome.culture && (b.learned.mask || b.learned.extra)) b.learned = nothingLearned();
+      // Ein Kind, das neben dem Ufer im Wasser landen würde, bleibt beim Elternteil
       if (cfg.terrain && w.terrain.typeAt(b.x, b.y) === WATER) { b.x = o.x; b.y = o.y; }
     }
   }
@@ -52,7 +55,7 @@ export function naturalSelection(w: World): void {
     while (w.organisms.length < cfg.minPopulation) {
       // Neubesiedlung aus Refugien (ohne Kultur); nur am Anfang Urformen
       const g = refugium.length
-        ? { ...mutate(refugium[rng.int(refugium.length)], rng, cfg.mutationRate), culture: false }
+        ? { ...mutate(refugium[rng.int(refugium.length)], rng, cfg.mutationRate), culture: false, line: 0 }
         : primordialGenome(rng);
       w.spawn(g);
     }

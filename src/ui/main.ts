@@ -196,6 +196,8 @@ const padRows = (rows: string[], cols: number, emptyText: string) => {
   for (let i = out.length; i < 10; i++) out.push(`<tr class="filler"><td colspan="${cols}" class="${i === 0 ? 'empty' : ''}">${i === 0 ? emptyText : '&nbsp;'}</td></tr>`);
   return out.join('');
 };
+/** Kontinente heißen A, B, C, D (−1 = auf dem Wasser / unbekannt). */
+const continentName = (r: number) => (r >= 0 ? String.fromCharCode(65 + r) : '–');
 const fmtSkills = (v: number) => (v < 10 ? v.toFixed(1) : String(Math.round(v)));
 const swatch = (hue: number) => `<span class="swatch" style="background:hsl(${hue} 65% 52%)"></span>`;
 const icons = (mask: number) => SKILLS.filter((_, i) => has(mask, i)).map((d) => `<span title="${d.label}: ${d.effect}">${d.icon}</span>`).join(' ');
@@ -284,7 +286,7 @@ function renderTop(): void {
     : `Sortiert nach Ø Fähigkeiten (wie der Spitzenreiter), nur Arten ab ${LEADER_MIN_MEMBERS} Individuen. Individuen: geschätzte Zahl der Lebewesen dieser Art. Klick auf eine Zeile hebt die Art in der Welt hervor, nochmal Klick hebt es auf.`;
   const head = `<thead><tr><th>#</th><th>Art</th><th class="num">Individuen</th>
     ${judge ? '<th class="num">Ø Kriterium</th>' : ''}<th class="num">Ø Fähigk.</th><th>Fähigkeiten (Mehrheit)</th>
-    <th>Ernährung</th>${judge ? '' : '<th>Kultur</th>'}<th class="num">lebt seit</th></tr></thead>`;
+    <th>Ernährung</th>${cfg.terrain ? '<th>Kontinent</th>' : ''}${judge ? '' : '<th>Kultur</th>'}<th class="num">lebt seit</th></tr></thead>`;
   const rows = list.map((s, i) => `<tr data-id="${s.id}" class="${s.id === picked ? 'picked' : ''}">
     <td>${!judge && s.id === snap!.leader?.id ? '🏆' : i + 1}</td>
     <td>${swatch(s.hue)}Art ${s.id}</td>
@@ -293,9 +295,10 @@ function renderTop(): void {
     <td class="num">${fmtSkills(s.skills)}</td>
     <td class="skills">${icons(s.common) || '–'}</td>
     <td>${s.predator ? '🥩 Räuber' : '🌿 Pflanzen'}</td>
-    ${judge ? '' : `<td>${s.culture > 0 ? `🧠 ${Math.round(s.culture * 100)} %` : '–'}</td>`}
+    ${cfg.terrain ? `<td>${continentName(s.home)}</td>` : ''}
+    ${judge ? '' : `<td>${s.culture > 0 ? `🧠 Linie ${s.line} · ${Math.round(s.culture * 100)} %` : '–'}</td>`}
     <td class="num">${s.born} <span class="muted">(${snap!.tick - s.born})</span></td></tr>`);
-  topTable.innerHTML = head + `<tbody>${padRows(rows, 9, 'noch keine Arten gezählt')}</tbody>`;
+  topTable.innerHTML = head + `<tbody>${padRows(rows, 10, 'noch keine Arten gezählt')}</tbody>`;
 }
 
 function renderExtinct(): void {

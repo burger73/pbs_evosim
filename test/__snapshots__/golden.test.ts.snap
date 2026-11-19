@@ -1,6 +1,6 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`Golden Master – frühere Welt ohne Gelände (muss bitgenau gleich bleiben) > Natur: Augen für alle, Dürre und Vulkan (Seed 3) 1`] = `
+exports[`Golden Master – frühere Welt ohne Gelände > Natur: Augen für alle, Dürre und Vulkan (Seed 3) 1`] = `
 {
   "avgSkills": 1.105263,
   "cultureShare": 0,
@@ -9,6 +9,7 @@ exports[`Golden Master – frühere Welt ohne Gelände (muss bitgenau gleich ble
   "food": 47,
   "hash": "f4cc44cf",
   "leader": 25,
+  "lines": "",
   "population": 19,
   "species": 2,
   "tick": 2500,
@@ -16,23 +17,24 @@ exports[`Golden Master – frühere Welt ohne Gelände (muss bitgenau gleich ble
 }
 `;
 
-exports[`Golden Master – frühere Welt ohne Gelände (muss bitgenau gleich bleiben) > Natur: Kultur, Eiszeit und Seuche (Seed 8) 1`] = `
+exports[`Golden Master – frühere Welt ohne Gelände > Natur: Kultur, Eiszeit und Seuche (Seed 8) 1`] = `
 {
-  "avgSkills": 14.940887,
-  "cultureShare": 0.995074,
-  "events": 12,
-  "extinct": 39,
+  "avgSkills": 10.844086,
+  "cultureShare": 1,
+  "events": 17,
+  "extinct": 38,
   "food": 47,
-  "hash": "a4604200",
+  "hash": "a9563e4b",
   "leader": 65,
-  "population": 203,
-  "species": 9,
+  "lines": "3:74/E2 6:57/E2 7:21/E1 8:14/E1 12:7/E1 16:13/E1",
+  "population": 186,
+  "species": 7,
   "tick": 5600,
-  "tipping": 4640,
+  "tipping": 4660,
 }
 `;
 
-exports[`Golden Master – frühere Welt ohne Gelände (muss bitgenau gleich bleiben) > Schiedsrichter: „Wer am größten ist“ 1`] = `
+exports[`Golden Master – frühere Welt ohne Gelände > Schiedsrichter: „Wer am größten ist“ 1`] = `
 {
   "avgSkills": 0.02,
   "cultureShare": 0,
@@ -41,9 +43,27 @@ exports[`Golden Master – frühere Welt ohne Gelände (muss bitgenau gleich ble
   "food": 1400,
   "hash": "f6e6f9e2",
   "leader": null,
+  "lines": "",
   "population": 150,
   "species": 5,
   "tick": 2000,
+  "tipping": null,
+}
+`;
+
+exports[`Golden Master – neue Welt mit Kontinenten > Kontinente, Kulturlinien, Eiszeit (Seed 8) 1`] = `
+{
+  "avgSkills": 1.823188,
+  "cultureShare": 0.095652,
+  "events": 23,
+  "extinct": 50,
+  "food": 1262,
+  "hash": "4d6aa8b6",
+  "leader": 362,
+  "lines": "6:2/E0 32:5/E1 40:21/E1 46:5/E1",
+  "population": 345,
+  "species": 23,
+  "tick": 7000,
   "tipping": null,
 }
 `;

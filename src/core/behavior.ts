@@ -27,7 +27,7 @@ let cult = new Uint8Array(0);
 let grp = new Int32Array(0);
 
 const B_WAFFEN = 1 << SKILL.waffen, B_HUETTE = 1 << SKILL.huette, B_METALL = 1 << SKILL.metall;
-const B_GRUPPE = 1 << SKILL.gruppe, B_BAU = 1 << SKILL.bau;
+const B_GRUPPE = 1 << SKILL.gruppe, B_BAU = 1 << SKILL.bau, B_BOOT = 1 << SKILL.boot;
 
 /** Wie traits.canEat (Natur-Modus), aber auf den vorberechneten Werten. Muss exakt gleich rechnen! */
 function canEatI(a: number, b: number, predatorSizeRatio: number): boolean {
@@ -190,7 +190,7 @@ export function stepOrganisms(w: World): void {
       const step = inMountain ? v * cfg.mountainSlow : v; // im Gebirge langsamer (die Anstrengung kostet trotzdem)
       const nx = (o.x + Math.cos(o.heading) * step + W) % W;
       const ny = (o.y + Math.sin(o.heading) * step + H) % H;
-      if (terrain.typeAt(nx, ny) !== WATER) {
+      if (terrain.typeAt(nx, ny) !== WATER || (skl[idx] & B_BOOT) !== 0) { // mit Boot geht es übers Wasser
         o.x = nx; o.y = ny; o.travelled += step;
       } else if (!(rng.chance(cfg.driftChance) && drift(w, o))) {
         // Am Ufer abprallen wie eine Billardkugel: die Richtung spiegeln, in der Wasser liegt.

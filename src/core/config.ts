@@ -187,7 +187,7 @@ export function defaultConfig(): SimConfig {
     mountainShare: 0.12,
     mountainSlow: 1,
     mountainCold: 1,
-    driftChance: 1e-5,
+    driftChance: 1e-4,
     driftRange: 500,
 
     baseCost: 0.05,
@@ -220,7 +220,7 @@ export function defaultConfig(): SimConfig {
     clearRate: 2.5e-7,
     regenRate: 2e-4,
 
-    cultureBoost: 50,
+    cultureBoost: 65,
     kickMinSkills: 3,
     cultureCost: 0.015,
     discoveryRate: 0.004,

@@ -57,6 +57,7 @@ function fingerprint(w: World) {
     avgSkills: Number(last.avgSkills.toFixed(6)),
     cultureShare: Number(last.cultureShare.toFixed(6)),
     leader: w.leader?.id ?? null,
+    lines: w.cultureLines.map((l) => `${l.id}:${l.carriers}/E${l.epoch}`).join(' '),
     extinct: w.extinct.length,
     tipping: w.tippingTick,
     events: w.events.length,
@@ -73,7 +74,15 @@ function run(over: Partial<SimConfig>, ticks: number, actions: Record<number, (w
   return fingerprint(w);
 }
 
-describe('Golden Master – frühere Welt ohne Gelände (muss bitgenau gleich bleiben)', () => {
+describe('Golden Master – neue Welt mit Kontinenten', () => {
+  it('Kontinente, Kulturlinien, Eiszeit (Seed 8)', () => {
+    expect(run({ seed: 8 }, 7000, { 6500: (w) => w.startCrisis('eiszeit') })).toMatchSnapshot();
+  }, 180_000);
+});
+
+// Ohne Kultur müssen diese Fingerabdrücke über Umbauten gleich bleiben; der Kultur-Fingerabdruck wurde in Etappe 3
+// (Kulturlinien) bewusst erneuert.
+describe('Golden Master – frühere Welt ohne Gelände', () => {
   it('Natur: Kultur, Eiszeit und Seuche (Seed 8)', () => {
     // Seed 8 mit Anschwung 80 kippt bei ~4400 in die Kultur – so laufen Kultur, Epochen und Krisen mit
     expect(run({ ...LEGACY_WORLD, seed: 8, cultureBoost: 80 }, 5600, {

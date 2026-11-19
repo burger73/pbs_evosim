@@ -21,6 +21,8 @@ export interface LaufErgebnis {
   /** alle 500 Schritte */
   verlauf: { tick: number; population: number; species: number; cultureShare: number; epoch: number }[];
   minPopulationAb1000: number;
+  /** Schritte, in denen ≥ 2 Kulturlinien (je ≥ 20 Träger) auf verschiedenen Kontinenten lebten. */
+  parallelKulturen: number;
   maxSpeciesVorKultur: number;
   crisisReports: World['crisisReports'];
   ms: number;
@@ -29,7 +31,7 @@ export interface LaufErgebnis {
 const job = workerData as LaufAuftrag;
 const t0 = performance.now();
 const w = new World({ ...defaultConfig(), seed: job.seed, ...job.config });
-let minPop = Infinity, maxSpecies = 0;
+let minPop = Infinity, maxSpecies = 0, parallel = 0;
 const verlauf: LaufErgebnis['verlauf'] = [];
 for (let t = 0; t < job.ticks; t++) {
   const c = job.crises?.[w.tick];
@@ -37,6 +39,7 @@ for (let t = 0; t < job.ticks; t++) {
   w.step();
   if (w.tick >= 1000) minPop = Math.min(minPop, w.organisms.length);
   if (w.tippingTick === null) maxSpecies = Math.max(maxSpecies, w.speciesCount);
+  if (w.tick % 10 === 0 && new Set(w.cultureLines.filter((l) => l.carriers >= 20).map((l) => l.home)).size >= 2) parallel += 10;
   if (w.tick % 500 === 0) {
     const s = w.samples[w.samples.length - 1];
     verlauf.push({ tick: w.tick, population: s.population, species: s.species, cultureShare: s.cultureShare, epoch: s.epoch });
@@ -48,6 +51,7 @@ const result: LaufErgebnis = {
   events: w.events,
   verlauf,
   minPopulationAb1000: minPop,
+  parallelKulturen: parallel,
   maxSpeciesVorKultur: maxSpecies,
   crisisReports: w.crisisReports,
   ms: performance.now() - t0,
