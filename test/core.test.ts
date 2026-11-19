@@ -123,7 +123,7 @@ describe('Genetische Fähigkeiten', () => {
   it('nur Gräber kommen an vergrabenes Futter', () => {
     for (const [skills, expectEaten] of [[0, false], [G(SKILL.graben), true]] as const) {
       const w = new World(cfg({ ...quiet, maxFood: 1, buriedShare: 1, foodRate: 0 }));
-      (w as unknown as { addFood: (x: number, y: number, l: number, b: boolean) => void }).addFood(102, 100, 10, true);
+      w.food.add(102, 100, 10, true);
       const o = w.spawn({ ...primordialGenome(w.rng), skills, speed: 0.1 }, 100, 100, 30);
       w.step();
       expect(o.eaten > 0).toBe(expectEaten);
