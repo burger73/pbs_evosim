@@ -69,7 +69,7 @@ export class SimHost {
         const w = this.world;
         if (!w) return null;
         let best: number | null = null;
-        let bestD = 30 * 30;
+        let bestD = msg.r * msg.r;
         for (const o of w.organisms) {
           const d = (o.x - msg.x) ** 2 + (o.y - msg.y) ** 2;
           if (d < bestD) { bestD = d; best = o.id; }

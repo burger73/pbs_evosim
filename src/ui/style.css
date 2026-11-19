@@ -230,3 +230,15 @@ table.species tr.filler td { border-bottom-color: transparent; }
   .statusbar { min-height: 105px; align-items: flex-start; }
   #cultureStatus { min-height: 77px; }
 }
+
+/* Angeklicktes Lebewesen: direkt unter der Welt, mit Schließen-Knopf */
+.stage .selected { position: relative; }
+.selected .close { position: absolute; top: 6px; right: 8px; padding: 0 9px; font-size: 1.2rem; line-height: 1.6; }
+.selected dl { grid-template-columns: auto 1fr auto 1fr; }
+@media (max-width: 600px) { .selected dl { grid-template-columns: auto 1fr; } }
+@media (min-width: 901px) {
+  /* Am Desktop als Karte oben rechts über der Welt – sonst läge sie unter dem sichtbaren Bereich */
+  .stage .selected { position: absolute; top: 10px; right: 10px; width: 300px; z-index: 2; box-shadow: 0 2px 12px rgba(0,0,0,0.18); }
+  .stage .selected dl { grid-template-columns: auto 1fr; }
+}
+@media (hover: none) { .no-touch { display: none; } } /* Touch-Geräte haben keine Leertaste */

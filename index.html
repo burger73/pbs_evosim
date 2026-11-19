@@ -27,8 +27,9 @@
             <li><b>A, B, C, D</b> = Kontinente · <span class="key k-water"></span><b>Wasser</b> trennt sie – nur selten treibt ein Lebewesen hinüber (Treibgut), Kulturen erst mit 🛶 Boot ·
               <span class="key k-mountain"></span><b>Gebirge</b> ist karg (kein Futter) und in Kältekrisen doppelt so kalt</li>
             <li><b>kleine Quadrate:</b> <span class="key k-food"></span>grün = Futter, <span class="key k-buried"></span>braun = vergrabenes Futter (nur für Gräber 🦀 erreichbar)</li>
-            <li><b>Kulturlinie</b> = alle, die von demselben „Kick“ abstammen; jede lernt nur unter sich und hat ihre eigene Epoche (Tabelle „Kulturen“ unter den Diagrammen)</li>
-            <li><b>Bedienung:</b> Klick auf ein Lebewesen zeigt sein Erbgut · Klick auf eine Art in der Tabelle hebt sie hervor ·
+            <li><b>Kulturlinie</b> = alle, die von demselben „Kick“ abstammen; jede lernt nur unter sich und hat ihre eigene Epoche (Tabelle „Kulturen“ unter den Diagrammen). Driften ihre Nachfahren äußerlich auseinander, werden daraus mehrere <b>Völker</b> – eine Kultur, kein Haufen Menschenarten.</li>
+            <li><b>„Art“</b> meint hier eine Gruppe ähnlicher Lebewesen. Echte Arten (wer sich mit wem fortpflanzen kann) gibt es nur mit Partnern – unsere Lebewesen teilen sich einfach.</li>
+            <li><b>Bedienung:</b> Klick auf ein Lebewesen zeigt sein Erbgut · Klick auf eine Zeile der Tabelle hebt die Gruppe hervor ·
               <kbd>Leertaste</kbd> = Pause · Krisen löst du rechts aus</li>
             <li>Die Welt ist bewusst klein (höchstens 900 Lebewesen), damit sie im Browser flüssig läuft. Gerade in kleinen Gruppen
               werden Zufall und Aussterben sichtbar.</li>
@@ -40,8 +41,12 @@
     <main>
       <section class="stage">
         <canvas id="world" aria-label="Simulationswelt"></canvas>
-        <div class="paused-badge" id="pausedBadge" hidden>⏸ angehalten · Leertaste zum Weiterlaufen</div>
+        <div class="paused-badge" id="pausedBadge" hidden>⏸ angehalten<span class="no-touch"> · Leertaste zum Weiterlaufen</span></div>
         <div class="paused-badge" id="loadingBadge" hidden>⏳ Vorlauf wird gerechnet …</div>
+        <div id="selected" class="selected" hidden>
+          <button type="button" class="close" id="closeSelected" title="Schließen" aria-label="Schließen">×</button>
+          <div id="selectedBody"></div>
+        </div>
         <div class="statusbar">
           <button id="pauseQuick" type="button" class="pause-quick" title="Anhalten / weiter (Leertaste)">⏸</button>
           <div class="stats" id="stats"></div>
@@ -50,11 +55,11 @@
         <div class="leader" id="leader" hidden></div>
 
         <figure>
-          <figcaption>Population · <span class="c-pop">alle übrigen</span> · <span class="c-pred">wilde Räuber</span> · <span class="c-cult">Kulturträger</span> · <span class="c-spec">Arten (rechte Skala)</span></figcaption>
+          <figcaption>Population · <span class="c-pop">alle übrigen</span> · <span class="c-pred">wilde Räuber</span> · <span class="c-cult">Kulturträger</span> · <span class="c-spec">Arten und Völker (rechte Skala)</span></figcaption>
           <canvas id="chartPop" class="chart"></canvas>
         </figure>
         <figure class="nature-only">
-          <figcaption>Messlatte: Fähigkeiten je Art (logarithmisch) · dick = 🏆 Spitzenreiter · farbig = die 4 größten Arten · gestrichelt = in der Tabelle ausgewählte Art</figcaption>
+          <figcaption>Messlatte: Fähigkeiten je Art bzw. Volk (logarithmisch) · dick = 🏆 Spitzenreiter · farbig = die 4 größten Arten · gestrichelt = in der Tabelle ausgewählte Art</figcaption>
           <canvas id="chartSpecies" class="chart tall"></canvas>
         </figure>
         <figure>
@@ -68,13 +73,13 @@
           <div class="table-wrap"><table class="species" id="lineTable"></table></div>
         </section>
         <section class="card">
-          <h2 id="topTitle">🏆 Die 10 stärksten Arten</h2>
+          <h2 id="topTitle">🏆 Die 10 stärksten Arten und Völker</h2>
           <p class="hint" id="topHint"></p>
           <div class="table-wrap"><table class="species" id="topTable"></table></div>
         </section>
         <section class="card nature-only">
           <h2>✝ Bemerkenswerte Ausgestorbene</h2>
-          <p class="hint">Arten, die einmal mindestens 30 Individuen hatten oder Spitzenreiter waren – die letzten 10. „Während“ heißt: zur Zeit der Krise verschwunden, nicht unbedingt durch sie.</p>
+          <p class="hint">Arten und Völker, die einmal mindestens 30 Individuen hatten oder Spitzenreiter waren – die letzten 10. „Während“ heißt: zur Zeit der Krise verschwunden, nicht unbedingt durch sie.</p>
           <div class="table-wrap"><table class="species" id="extinctTable"></table></div>
         </section>
         <section class="card">
@@ -133,7 +138,6 @@
         </fieldset>
 
         <div id="report" class="report" hidden></div>
-        <div id="selected" class="selected" hidden></div>
       </aside>
     </main>
     <script type="module" src="/src/ui/main.ts"></script>

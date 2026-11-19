@@ -51,7 +51,7 @@ describe('SimHost (Simulation hinter dem Worker)', { timeout: 60_000 }, () => {
     expect(host.world!.cfg.mutationRate).toBe(2);
     expect(host.world!.events.at(-1)!.label).toBe('Mutation 2.0×');
     const o = host.world!.organisms[0];
-    host.handle({ type: 'select', x: o.x, y: o.y });
+    host.handle({ type: 'select', x: o.x, y: o.y, r: 30 });
     expect(host.handle({ type: 'run', steps: 0 }, noClock)!.selected?.id).toBe(o.id);
   });
 
