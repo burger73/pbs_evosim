@@ -199,6 +199,12 @@ const padRows = (rows: string[], cols: number, emptyText: string) => {
 };
 /** Kontinente heißen A, B, C, D (−1 = auf dem Wasser / unbekannt). */
 const continentName = (r: number) => (r >= 0 ? String.fromCharCode(65 + r) : '–');
+/**
+ * „Art“ oder „Volk“: Gruppen ähnlicher Lebewesen heißen Art; hat die Mehrheit Kultur, ist es ein Volk
+ * (eine Kulturlinie zerfällt durch äußerliche Drift in mehrere Völker – das sind keine Menschenarten).
+ */
+const isVolk = (culture: number | boolean) => (typeof culture === 'boolean' ? culture : culture > 0.5);
+const groupName = (id: number, culture: number | boolean) => `${isVolk(culture) ? 'Volk' : 'Art'} ${id}`;
 const fmtSkills = (v: number) => (v < 10 ? v.toFixed(1) : String(Math.round(v)));
 const swatch = (hue: number) => `<span class="swatch" style="background:hsl(${hue} 65% 52%)"></span>`;
 const icons = (mask: number) => SKILLS.filter((_, i) => has(mask, i)).map((d) => `<span title="${d.label}: ${d.effect}">${d.icon}</span>`).join(' ');
@@ -232,7 +238,7 @@ function renderStats(): void {
     `Zeit <b>${w.tick}</b>`,
     `Population <b>${w.population}</b>`,
     `wilde Räuber <b>${s.predators}</b>`,
-    `Arten <b>${w.speciesCount}</b>`,
+    ...groupCounts(),
     `Ø Fähigkeiten <b>${s.avgSkills < 10 ? s.avgSkills.toFixed(1) : Math.round(s.avgSkills)}</b>`,
   ];
   if (s.fertility < 0.99) parts.push(`Boden${cfg.terrain ? ' ' + continentName(s.fertilityRegion) : ''} <b class="${s.fertility < 0.5 ? 'crisis' : ''}">${Math.round(s.fertility * 100)} %</b>`);
@@ -268,7 +274,7 @@ function renderLeader(): void {
   leaderEl.hidden = cfg.mode !== 'natur';
   if (!l) { leaderEl.innerHTML = '🏆 <span class="muted">noch kein Spitzenreiter – zählt ab 10 Individuen und Ø 1 Fähigkeit</span>'; return; }
   leaderEl.innerHTML = `🏆 <b>Spitzenreiter</b>
-    ${swatch(l.hue)}Art ${l.id}
+    ${swatch(l.hue)}${groupName(l.id, l.culture)}
     · Ø <b>${fmtSkills(l.skills)}</b> Fähigkeiten · <b>${l.members}</b> Individuen${l.culture > 0.5 ? ' · 🧠 Kultur' : ''}
     · <span class="skills">${icons(l.common) || '–'}</span>
     · führt seit ${l.since} <span class="muted">(${snap!.tick - l.since} Schritte)</span>`;
@@ -284,14 +290,14 @@ function renderTop(): void {
   const list = [...(big.length ? big : all)].sort((a, b) => key(b) - key(a) || b.members - a.members).slice(0, 10);
   if (picked !== null && !census?.species.some((s) => s.id === picked)) { picked = null; send({ type: 'pick', id: null }); } // ausgestorben
   topHint.textContent = judge
-    ? `Sortiert nach „${FITNESS_LABELS[cfg.fitness]}“ (Ø der Art), nur Arten ab ${LEADER_MIN_MEMBERS} Individuen. Klick auf eine Zeile hebt die Art in der Welt hervor.`
-    : `Sortiert nach Ø Fähigkeiten (wie der Spitzenreiter), nur Arten ab ${LEADER_MIN_MEMBERS} Individuen. Individuen: geschätzte Zahl der Lebewesen dieser Art. Klick auf eine Zeile hebt die Art in der Welt hervor, nochmal Klick hebt es auf.`;
-  const head = `<thead><tr><th>#</th><th>Art</th><th class="num">Individuen</th>
+    ? `Sortiert nach „${FITNESS_LABELS[cfg.fitness]}“ (Ø der Gruppe), nur Gruppen ab ${LEADER_MIN_MEMBERS} Individuen. Klick auf eine Zeile hebt die Gruppe in der Welt hervor.`
+    : `Sortiert nach Ø Fähigkeiten (wie der Spitzenreiter), nur Gruppen ab ${LEADER_MIN_MEMBERS} Individuen. Hat die Mehrheit Kultur, heißt die Gruppe „Volk“. Individuen: geschätzte Zahl der Lebewesen. Klick auf eine Zeile hebt die Gruppe in der Welt hervor, nochmal Klick hebt es auf.`;
+  const head = `<thead><tr><th>#</th><th>Art / Volk</th><th class="num">Individuen</th>
     ${judge ? '<th class="num">Ø Kriterium</th>' : ''}<th class="num">Ø Fähigk.</th><th>Fähigkeiten (Mehrheit)</th>
     <th>Ernährung</th>${cfg.terrain ? '<th>Kontinent</th>' : ''}${judge ? '' : '<th title="Kulturlinie der Mehrheit · Anteil Kulturträger">Linie</th>'}<th class="num">lebt seit</th></tr></thead>`;
   const rows = list.map((s, i) => `<tr data-id="${s.id}" class="${s.id === picked ? 'picked' : ''}">
     <td>${!judge && s.id === snap!.leader?.id ? '🏆' : i + 1}</td>
-    <td>${swatch(s.hue)}Art ${s.id}</td>
+    <td>${swatch(s.hue)}${groupName(s.id, s.culture)}</td>
     <td class="num">${s.members}</td>
     ${judge ? `<td class="num">${s.score.toFixed(1)}</td>` : ''}
     <td class="num">${fmtSkills(s.skills)}</td>
@@ -303,28 +309,39 @@ function renderTop(): void {
   topTable.innerHTML = head + `<tbody>${padRows(rows, 10, 'noch keine Arten gezählt')}</tbody>`;
 }
 
+/** „Arten 12 · Völker 17“ (Völker = Gruppen, deren Mehrheit Kultur hat). */
+function groupCounts(): string[] {
+  const last = view.census[view.census.length - 1];
+  if (!last) return [];
+  const voelker = last.species.filter((s) => isVolk(s.culture)).length;
+  const arten = last.species.length - voelker;
+  return voelker ? [`Arten <b>${arten}</b>`, `Völker <b>${voelker}</b>`] : [`Arten <b>${arten}</b>`];
+}
+
 /** Kulturlinien: Heimat, Träger, Epoche – „Arm und Reich“ auf einen Blick. Fest 4 Zeilen hoch (springt nicht). */
 function renderLines(): void {
   const lines = snap!.lines.slice(0, 6);
-  const head = `<thead><tr><th>Linie</th><th>Heimat</th><th class="num">Träger</th><th>Epoche</th><th class="num">Ø Fähigk.</th><th class="num">gekippt</th><th class="num">gegründet</th></tr></thead>`;
+  const census = view.census[view.census.length - 1];
+  const peoples = (id: number) => census?.species.filter((s) => isVolk(s.culture) && s.line === id).length ?? 0;
+  const head = `<thead><tr><th>Linie</th><th>Heimat</th><th class="num">Träger</th><th class="num" title="Gruppen dieser Kultur, die sich äußerlich auseinanderentwickelt haben">Völker</th><th>Epoche</th><th class="num">Ø Fähigk.</th><th class="num">gekippt</th><th class="num">gegründet</th></tr></thead>`;
   const rows = lines.map((l) => {
     const [home, ...more] = l.continents.filter((c) => c.share >= 0.05);
     const where = cfg.terrain ? (home ? continentName(home.region) + (more.length ? ` <span class="muted">+ ${more.map((c) => continentName(c.region)).join(', ')}</span>` : '') : '–') : '–';
     const ep = l.epoch > 0 ? `${EPOCHS[l.epoch - 1].icon} ${EPOCHS[l.epoch - 1].name}` : '<span class="muted">noch keine</span>';
-    return `<tr><td>${swatch(l.hue)}Linie ${l.id}</td><td>${where}</td><td class="num">${l.carriers}</td><td>${ep}</td>
+    return `<tr><td>${swatch(l.hue)}Linie ${l.id}</td><td>${where}</td><td class="num">${l.carriers}</td><td class="num">${peoples(l.id) || '–'}</td><td>${ep}</td>
       <td class="num">${fmtSkills(l.skills)}</td><td class="num">${l.tippingTick ?? '–'}</td><td class="num">${l.founded}</td></tr>`;
   });
   const out = [...rows];
-  for (let i = out.length; i < 4; i++) out.push(`<tr class="filler"><td colspan="7" class="${i === 0 ? 'empty' : ''}">${i === 0 ? 'noch keine Kultur mit 10 Trägern' : '&nbsp;'}</td></tr>`);
+  for (let i = out.length; i < 4; i++) out.push(`<tr class="filler"><td colspan="8" class="${i === 0 ? 'empty' : ''}">${i === 0 ? 'noch keine Kultur mit 10 Trägern' : '&nbsp;'}</td></tr>`);
   lineTable.innerHTML = head + `<tbody>${out.join('')}</tbody>`;
 }
 
 function renderExtinct(): void {
   const list = view.extinct.slice(-10).reverse();
-  const head = `<thead><tr><th>Art</th><th>lebte</th>${cfg.terrain ? '<th>Kontinent</th>' : ''}<th class="num">Höchststand</th><th class="num">beste Ø Fähigk.</th>
+  const head = `<thead><tr><th>Art / Volk</th><th>lebte</th>${cfg.terrain ? '<th>Kontinent</th>' : ''}<th class="num">Höchststand</th><th class="num">beste Ø Fähigk.</th>
     <th>Fähigkeiten (damals)</th><th>Ende</th></tr></thead>`;
   const rows = list.map((e) => `<tr>
-    <td>${swatch(e.hue)}Art ${e.id}${e.wasLeader ? ' 🏆' : ''}</td>
+    <td>${swatch(e.hue)}${groupName(e.id, e.culture)}${e.wasLeader ? ' 🏆' : ''}</td>
     <td>${e.born}–${e.died}</td>${cfg.terrain ? `<td>${continentName(e.home)}</td>` : ''}
     <td class="num">${e.peakMembers} Ind.</td>
     <td class="num">${fmtSkills(e.peakSkills)}</td>

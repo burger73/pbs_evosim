@@ -93,6 +93,8 @@ export interface ExtinctSpecies {
   wasLeader: boolean;
   /** Kontinent, auf dem die Art zuletzt hauptsächlich lebte (−1 = unbekannt). */
   home: number;
+  /** Hatte die Gruppe zuletzt mehrheitlich Kultur? Dann war es ein Volk, keine Art. */
+  culture: boolean;
   /** Krise, während der die Art verschwand. */
   crisis: CrisisKind | null;
 }

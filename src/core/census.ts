@@ -22,6 +22,7 @@ interface SpeciesRecord {
   peakCommon: number;
   wasLeader: boolean;
   home: number;
+  culture: boolean;
 }
 
 export class CensusSystem {
@@ -71,7 +72,7 @@ export class CensusSystem {
         if (d < best) { best = d; rec = s; }
       }
       if (!rec) {
-        rec = { id: this.nextSpeciesId++, hue: c.representative.hue, rep: c.representative, born: w.tick, peakMembers: 0, peakSkills: 0, peakCommon: 0, wasLeader: false, home: -1 };
+        rec = { id: this.nextSpeciesId++, hue: c.representative.hue, rep: c.representative, born: w.tick, peakMembers: 0, peakSkills: 0, peakCommon: 0, wasLeader: false, home: -1, culture: false };
         this.registry.push(rec);
       }
       rec.rep = c.representative;
@@ -108,6 +109,7 @@ export class CensusSystem {
       stats.push(st);
       rec.peakMembers = Math.max(rec.peakMembers, st.members);
       rec.home = st.home;
+      rec.culture = st.culture > 0.5;
       if (st.skills >= rec.peakSkills) { rec.peakSkills = st.skills; rec.peakCommon = common; }
     }
     this.updateLeader(w, stats);
@@ -121,7 +123,7 @@ export class CensusSystem {
       if (used.has(r.id) || !(r.peakMembers >= NOTABLE_MEMBERS || r.wasLeader)) continue;
       this.extinct.push({
         id: r.id, hue: r.hue, born: r.born, died: w.tick, peakMembers: r.peakMembers, peakSkills: r.peakSkills,
-        common: r.peakCommon, wasLeader: r.wasLeader, home: r.home, crisis: w.crisis?.kind ?? null,
+        common: r.peakCommon, wasLeader: r.wasLeader, home: r.home, culture: r.culture, crisis: w.crisis?.kind ?? null,
       });
     }
     if (this.extinct.length > MAX_EXTINCT) this.extinct.splice(0, this.extinct.length - MAX_EXTINCT);
