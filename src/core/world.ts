@@ -924,7 +924,7 @@ export class World {
     this.tippingStreak = s.cultureShare >= TIPPING_SHARE && s.cultureSkills >= TIPPING_SKILLS ? this.tippingStreak + 1 : 0;
     if (this.tippingStreak >= 5) {
       this.tippingTick = this.tick;
-      this.addEvent('Kipppunkt');
+      this.addEvent('⚡ Kultur kippt');
     }
   }
 

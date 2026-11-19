@@ -18,7 +18,7 @@ und vererbtem Gehirn (winziges neuronales Netz). Niemand programmiert ihr Verhal
 - **Krisen:** ❄️ Eiszeit, ☀️ Dürre, 🌋 Vulkanwinter, 🦠 Seuche (Ansteckung über Nähe, Medizin halbiert die
   Sterblichkeit) – per Button oder zufällig. Nach einem Massenaussterben besiedeln Überlebende aus Refugien die Welt neu.
 - **Bilanz & Messlatte:** Nach jeder Krise Überleben nach Zahl der Fähigkeiten (gemessen, nicht vorausgesetzt);
-  Fähigkeiten je Art über die Zeit (logarithmisch), 🏆 Spitzenreiter, Kipppunkt-Erkennung.
+  Fähigkeiten je Art über die Zeit (logarithmisch), 🏆 Spitzenreiter, Erkennung des Kultur-Kipppunkts.
 - **Schiedsrichter:** Ein festgelegtes Kriterium entscheidet nach jeder Generation, wer sich fortpflanzt –
   z. B. „wer am rötesten ist“. Die Population wird rot, obwohl Röte fürs Überleben nichts bringt.
 

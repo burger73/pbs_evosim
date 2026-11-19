@@ -151,6 +151,12 @@ const bar = (v: number, [lo, hi]: readonly [number, number]) => {
   const n = Math.round(((v - lo) / (hi - lo)) * 10);
   return '▮'.repeat(n) + '▯'.repeat(10 - n);
 };
+/** Tabellen immer auf 10 Zeilen auffüllen, damit darunter nichts springt. */
+const padRows = (rows: string[], cols: number, emptyText: string) => {
+  const out = [...rows];
+  for (let i = out.length; i < 10; i++) out.push(`<tr class="filler"><td colspan="${cols}" class="${i === 0 ? 'empty' : ''}">${i === 0 ? emptyText : '&nbsp;'}</td></tr>`);
+  return out.join('');
+};
 const fmtSkills = (v: number) => (v < 10 ? v.toFixed(1) : String(Math.round(v)));
 const swatch = (hue: number) => `<span class="swatch" style="background:hsl(${hue} 65% 52%)"></span>`;
 const icons = (mask: number) => SKILLS.filter((_, i) => has(mask, i)).map((d) => `<span title="${d.label}: ${d.effect}">${d.icon}</span>`).join(' ');
@@ -202,7 +208,7 @@ function renderStats(): void {
   if (cfg.cultureBoost === 0) c.push('Kultur: <b>aus</b> (Anschwung 0)');
   else if (world.tippingTick !== null) {
     const ep = s.epoch > 0 ? EPOCHS[s.epoch - 1] : null;
-    c.push(`<b class="tipped">⚡ Kipppunkt bei ${world.tippingTick}</b>`,
+    c.push(`<b class="tipped">⚡ Kultur-Kipppunkt bei ${world.tippingTick}</b>`,
       ep ? `Epoche <b>${ep.icon} ${ep.name}</b> (${s.epoch}/${EPOCHS.length})` : 'Kultur erloschen',
       `Kulturträger <b>${Math.round(s.population * s.cultureShare)}</b>`, `Rekord <b>${s.maxSkills}</b> Fähigkeiten`);
   } else if (s.cultureShare > 0) {
@@ -216,8 +222,8 @@ function renderStats(): void {
 
 function renderLeader(): void {
   const l = world.leader;
-  if (!l || cfg.mode !== 'natur') { leaderEl.hidden = true; return; }
-  leaderEl.hidden = false;
+  leaderEl.hidden = cfg.mode !== 'natur';
+  if (!l) { leaderEl.innerHTML = '🏆 <span class="muted">noch kein Spitzenreiter – zählt ab 10 Individuen und Ø 1 Fähigkeit</span>'; return; }
   leaderEl.innerHTML = `🏆 <b>Spitzenreiter</b>
     ${swatch(l.hue)}Art ${l.id}
     · Ø <b>${fmtSkills(l.skills)}</b> Fähigkeiten · <b>${l.members}</b> Individuen${l.culture > 0.5 ? ' · 🧠 Kultur' : ''}
@@ -249,8 +255,8 @@ function renderTop(): void {
     <td class="skills">${icons(s.common) || '–'}</td>
     <td>${s.predator ? '🥩 Räuber' : '🌿 Pflanzen'}</td>
     ${judge ? '' : `<td>${s.culture > 0 ? `🧠 ${Math.round(s.culture * 100)} %` : '–'}</td>`}
-    <td class="num">${s.born} <span class="muted">(${world.tick - s.born})</span></td></tr>`).join('');
-  topTable.innerHTML = head + `<tbody>${rows || '<tr><td colspan="9" class="empty">noch keine Arten gezählt</td></tr>'}</tbody>`;
+    <td class="num">${s.born} <span class="muted">(${world.tick - s.born})</span></td></tr>`);
+  topTable.innerHTML = head + `<tbody>${padRows(rows, 9, 'noch keine Arten gezählt')}</tbody>`;
 }
 
 function renderExtinct(): void {
@@ -263,8 +269,8 @@ function renderExtinct(): void {
     <td class="num">${e.peakMembers} Ind.</td>
     <td class="num">${fmtSkills(e.peakSkills)}</td>
     <td class="skills">${icons(e.common) || '–'}</td>
-    <td>${e.crisis ? `während ${CRISES[e.crisis].icon} ${CRISES[e.crisis].label}` : '–'}</td></tr>`).join('');
-  extinctTable.innerHTML = head + `<tbody>${rows || '<tr><td colspan="6" class="empty">noch keine bemerkenswerte Art ausgestorben</td></tr>'}</tbody>`;
+    <td>${e.crisis ? `während ${CRISES[e.crisis].icon} ${CRISES[e.crisis].label}` : '–'}</td></tr>`);
+  extinctTable.innerHTML = head + `<tbody>${padRows(rows, 6, 'noch keine bemerkenswerte Art ausgestorben')}</tbody>`;
 }
 
 function renderLegend(): void {
