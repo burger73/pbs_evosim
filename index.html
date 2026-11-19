@@ -4,16 +4,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>EvoSim</title>
-    <meta name="description" content="Evolution im Browser: Variation, Selektion – und wer ist der Schiedsrichter?" />
+    <meta name="description" content="Evolution im Browser: Fähigkeiten, Krisen, Kultur – und wer ist der Schiedsrichter?" />
   </head>
   <body>
     <header id="intro">
       <h1>EvoSim</h1>
       <p>
-        Kleine Lebewesen mit vererbtem Körper und Gehirn. Niemand programmiert ihr Verhalten –
-        es entsteht durch <strong>Variation</strong> (Mutation beim Teilen) und <strong>Selektion</strong>.
-        Im Modus <em>Natur</em> entscheidet allein die Umwelt, wer überlebt. Im Modus <em>Schiedsrichter</em>
-        legst du fest, wer sich fortpflanzen darf.
+        Lebewesen mit vererbtem Körper, Gehirn und <strong>Fähigkeiten, ihre Umwelt zu beeinflussen</strong>
+        (graben, Bau, Vorrat, Netz, Rudel, Werkzeug). Niemand programmiert sie – sie entstehen durch Mutation
+        und Selektion. Mit Glück zündet irgendwann <strong>Kultur</strong>: Wissen wird gelernt und weitergegeben,
+        statt vererbt. Krisen zeigen, wem seine Fähigkeiten nützen.
       </p>
     </header>
 
@@ -21,6 +21,7 @@
       <section class="stage">
         <canvas id="world" aria-label="Simulationswelt"></canvas>
         <div class="stats" id="stats"></div>
+        <div class="stats" id="cultureStatus"></div>
       </section>
 
       <aside class="panel">
@@ -51,27 +52,40 @@
         <fieldset class="nature-only">
           <legend>Experimente</legend>
           <button id="eyes" type="button">👁 Augen freischalten</button>
-          <button id="culture" type="button">🧠 Kultur freischalten</button>
+          <label>Kultur-Anschwung (Glück für den „Kick“) <output id="boostOut"></output>
+            <input id="boost" type="range" min="0" max="100" value="50" />
+          </label>
           <label>Sauerstoff (Futterwachstum) <output id="oxyOut"></output>
             <input id="oxygen" type="range" min="0.2" max="3" step="0.1" value="1" />
           </label>
         </fieldset>
 
+        <fieldset class="nature-only">
+          <legend>Krisen</legend>
+          <div class="row crisis-buttons">
+            <button type="button" data-crisis="eiszeit">❄️ Eiszeit</button>
+            <button type="button" data-crisis="duerre">☀️ Dürre</button>
+            <button type="button" data-crisis="vulkan">🌋 Vulkanwinter</button>
+          </div>
+          <label class="check"><input id="randomCrises" type="checkbox" /> zufällige Krisen</label>
+        </fieldset>
+
         <figure>
-          <figcaption>Population · <span class="c-pop">Pflanzenfresser</span> · <span class="c-pred">Räuber</span> · <span class="c-spec">Arten</span></figcaption>
+          <figcaption>Population · <span class="c-pop">alle übrigen</span> · <span class="c-pred">wilde Räuber</span> · <span class="c-cult">Kulturträger</span> · <span class="c-spec">Arten</span></figcaption>
           <canvas id="chartPop" class="chart"></canvas>
         </figure>
         <figure class="nature-only">
-          <figcaption>Fähigkeiten (Messlatte) · <span class="c-cult">Kulturträger</span> · <span class="c-rest">alle anderen</span> · <span class="c-share">Anteil Kulturträger</span></figcaption>
-          <canvas id="chartSkills" class="chart"></canvas>
+          <figcaption>Messlatte: Fähigkeiten je Art (Linienfarbe = Art, logarithmisch)</figcaption>
+          <canvas id="chartSpecies" class="chart tall"></canvas>
         </figure>
         <figure>
-          <figcaption>Merkmale (Ø) · <span class="c-size">Größe</span> · <span class="c-speed">Tempo</span> · <span class="c-sense">Sicht</span> · <span class="c-diet">Räuber-Anteil der Ernährung</span> · <span class="c-intel">Intelligenz</span></figcaption>
+          <figcaption>Merkmale (Ø) · <span class="c-size">Größe</span> · <span class="c-speed">Tempo</span> · <span class="c-sense">Sicht</span> · <span class="c-diet">Räuber-Anteil der Ernährung</span></figcaption>
           <canvas id="chartTraits" class="chart"></canvas>
         </figure>
 
+        <div id="report" class="report" hidden></div>
         <div id="selected" class="selected" hidden></div>
-        <p class="hint">Tipp: Klick auf ein Lebewesen zeigt sein Erbgut.</p>
+        <p class="hint">Tipp: Klick auf ein Lebewesen zeigt sein Erbgut und seine Fähigkeiten.</p>
       </aside>
     </main>
     <script type="module" src="/src/ui/main.ts"></script>

@@ -1,5 +1,6 @@
-import { skillCount } from '../core/skills.ts';
-import type { Organism, Sample, SimEvent, World } from '../core/world.ts';
+import { CRISES } from '../core/config.ts';
+import { GENETIC_MASK, popcount } from '../core/skills.ts';
+import type { Census, Organism, Sample, SimEvent, World } from '../core/world.ts';
 
 export const css = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
@@ -20,10 +21,16 @@ export function drawWorld(canvas: HTMLCanvasElement, world: World, selected: Org
   const k = fitCanvas(canvas, world.cfg.width);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // Futter
-  ctx.fillStyle = css('--food');
+  if (world.crisis) {
+    ctx.fillStyle = CRISES[world.crisis.kind].tint;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+
+  // Futter: Oberfläche grün, vergraben braun
   const fr = Math.max(1, world.cfg.foodRadius * k);
+  const surface = css('--food'), buried = css('--buried');
   for (let i = 0; i < world.foodX.length; i++) {
+    ctx.fillStyle = world.foodBuried[i] ? buried : surface;
     ctx.fillRect(world.foodX[i] * k - fr / 2, world.foodY[i] * k - fr / 2, fr, fr);
   }
 
@@ -33,7 +40,7 @@ export function drawWorld(canvas: HTMLCanvasElement, world: World, selected: Org
   for (const o of world.organisms) {
     const r = world.radius(o) * k;
     const x = o.x * k, y = o.y * k;
-    const pred = world.isPredator(o);
+    const pred = world.isPredator(o) && !o.genome.culture;
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.fillStyle = `hsl(${o.genome.hue} 65% ${pred ? 42 : 52}%)`;
@@ -43,22 +50,22 @@ export function drawWorld(canvas: HTMLCanvasElement, world: World, selected: Org
       ctx.strokeStyle = predColor;
       ctx.stroke();
     }
-    // Kulturträger: goldener Ring, dicker je mehr Fähigkeiten
-    const sk = skillCount(o.skills);
-    if (sk > 0) {
+    // Genetische Fähigkeiten: heller Punkt in der Mitte, größer je mehr
+    const g = popcount(o.genome.skills & GENETIC_MASK);
+    if (g > 0) {
+      ctx.beginPath();
+      ctx.arc(x, y, Math.max(1, r * (0.2 + 0.1 * g)), 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.fill();
+    }
+    // Kulturträger: goldener Ring
+    if (o.genome.culture) {
       ctx.beginPath();
       ctx.arc(x, y, r + 2 * k, 0, Math.PI * 2);
-      ctx.lineWidth = Math.max(1, Math.min(4, 0.6 + Math.log2(1 + sk) * 0.5) * k);
+      ctx.lineWidth = Math.max(1.5, 2 * k);
       ctx.strokeStyle = cultColor;
       ctx.stroke();
     }
-    // Blickrichtung
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(x + Math.cos(o.heading) * r * 1.6, y + Math.sin(o.heading) * r * 1.6);
-    ctx.lineWidth = Math.max(1, r * 0.2);
-    ctx.strokeStyle = 'rgba(0,0,0,0.45)';
-    ctx.stroke();
   }
 
   if (selected && selected.alive) {
@@ -71,10 +78,27 @@ export function drawWorld(canvas: HTMLCanvasElement, world: World, selected: Org
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.beginPath();
-    ctx.arc(x, y, world.radius(selected) * k + 4 * k, 0, Math.PI * 2);
+    ctx.arc(x, y, world.radius(selected) * k + 5 * k, 0, Math.PI * 2);
     ctx.lineWidth = 2 * k;
     ctx.stroke();
   }
+}
+
+function drawEvents(ctx: CanvasRenderingContext2D, events: readonly SimEvent[], t0: number, xOf: (t: number) => number, H: number, dpr: number): void {
+  ctx.strokeStyle = css('--muted');
+  ctx.fillStyle = css('--muted');
+  ctx.font = `${10 * dpr}px system-ui, sans-serif`;
+  ctx.setLineDash([3 * dpr, 3 * dpr]);
+  let lastX = -Infinity, row = 0;
+  for (const e of events) {
+    if (e.tick < t0) continue;
+    const x = xOf(e.tick);
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+    row = x - lastX < 60 * dpr ? (row + 1) % 3 : 0; // Beschriftungen nicht übereinander
+    ctx.fillText(e.label, x + 3 * dpr, (11 + row * 11) * dpr);
+    lastX = x;
+  }
+  ctx.setLineDash([]);
 }
 
 export interface Series {
@@ -102,18 +126,16 @@ export function drawChart(canvas: HTMLCanvasElement, samples: readonly Sample[],
   };
   const max = { left: maxFor('left'), right: maxFor('right') };
 
-  // Ereignisse
-  ctx.strokeStyle = css('--muted');
-  ctx.fillStyle = css('--muted');
-  ctx.font = `${10 * dpr}px system-ui, sans-serif`;
-  ctx.setLineDash([3 * dpr, 3 * dpr]);
-  for (const e of events) {
-    if (e.tick < t0) continue;
-    const x = xOf(e.tick);
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
-    ctx.fillText(e.label, x + 3 * dpr, 11 * dpr);
+  // Krisenphasen hinterlegen
+  for (let i = 0; i < samples.length; i++) {
+    const c = samples[i].crisis;
+    if (!c) continue;
+    ctx.fillStyle = CRISES[c].tint;
+    const x = xOf(samples[i].tick);
+    const next = i + 1 < samples.length ? xOf(samples[i + 1].tick) : x + 1;
+    ctx.fillRect(x, 0, Math.max(1, next - x), H);
   }
-  ctx.setLineDash([]);
+  drawEvents(ctx, events, t0, xOf, H, dpr);
 
   ctx.lineWidth = 1.6 * dpr;
   for (const s of series) {
@@ -125,6 +147,55 @@ export function drawChart(canvas: HTMLCanvasElement, samples: readonly Sample[],
       const y = H - pad - (s.value(p) / m) * (H - 2 * pad);
       if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     });
+    ctx.stroke();
+  }
+}
+
+/** Messlatte: eine Linie pro Art (Farbe der Art), Fähigkeiten logarithmisch. */
+export function drawSpeciesChart(canvas: HTMLCanvasElement, census: readonly Census[], events: readonly SimEvent[]): void {
+  const ctx = canvas.getContext('2d')!;
+  const dpr = fitCanvas(canvas);
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  if (census.length < 2) return;
+  const padL = 26 * dpr, pad = 4 * dpr;
+  const t0 = census[0].tick, t1 = census[census.length - 1].tick;
+  const xOf = (t: number) => padL + ((t - t0) / Math.max(1, t1 - t0)) * (W - padL - pad);
+  let maxV = Math.log10(1 + 10);
+  for (const c of census) for (const s of c.species) maxV = Math.max(maxV, Math.log10(1 + s.skills));
+  maxV *= 1.08;
+  const yOf = (skills: number) => H - pad - (Math.log10(1 + skills) / maxV) * (H - 2 * pad);
+
+  // Skala 0, 1, 10, 100, …
+  ctx.font = `${9 * dpr}px system-ui, sans-serif`;
+  ctx.fillStyle = css('--muted');
+  ctx.strokeStyle = css('--border');
+  ctx.lineWidth = 1;
+  for (const v of [0, 1, 3, 10, 30, 100, 300, 1000, 3000, 10000]) {
+    if (Math.log10(1 + v) > maxV) break;
+    const y = yOf(v);
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - pad, y); ctx.stroke();
+    ctx.fillText(String(v), 2 * dpr, y + 3 * dpr);
+  }
+  drawEvents(ctx, events, t0, xOf, H, dpr);
+
+  // Linien pro Art
+  const lines = new Map<number, { hue: number; culture: boolean; pts: [number, number][] }>();
+  for (const c of census) {
+    for (const s of c.species) {
+      if (s.members < 5) continue;
+      let l = lines.get(s.id);
+      if (!l) { l = { hue: s.hue, culture: false, pts: [] }; lines.set(s.id, l); }
+      if (s.culture > 0.5) l.culture = true;
+      l.pts.push([xOf(c.tick), yOf(s.skills)]);
+    }
+  }
+  for (const l of lines.values()) {
+    if (l.pts.length < 2) continue;
+    ctx.strokeStyle = `hsl(${l.hue} 65% 45%)`;
+    ctx.lineWidth = (l.culture ? 2.6 : 1.3) * dpr;
+    ctx.beginPath();
+    l.pts.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
     ctx.stroke();
   }
 }

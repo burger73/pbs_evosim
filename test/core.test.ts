@@ -4,7 +4,8 @@ import { LIMITS, hueDistance, mutate, primordialGenome } from '../src/core/genom
 import { Grid } from '../src/core/grid.ts';
 import { Rng } from '../src/core/rng.ts';
 import { clusterSpecies } from '../src/core/species.ts';
-import { SKILL, available, has, skillCount } from '../src/core/skills.ts';
+import { GENETIC_MASK, SKILL, SKILLS, available, has, popcount } from '../src/core/skills.ts';
+import { mutateSkills } from '../src/core/genome.ts';
 import { World } from '../src/core/world.ts';
 
 const cfg = (o: Partial<SimConfig> = {}): SimConfig => ({ ...defaultConfig(), ...o });
@@ -59,7 +60,7 @@ describe('Grid', () => {
 describe('Arten', () => {
   it('erkennt zwei deutlich verschiedene Gruppen', () => {
     const rng = new Rng(5);
-    const base = { speed: 1, sense: 0.3, intellect: 0.1 };
+    const base = { speed: 1, sense: 0.3, skills: 0, culture: false };
     const a = Array.from({ length: 20 }, () => ({ ...primordialGenome(rng), ...base, hue: 0, diet: 0, size: 1 }));
     const b = Array.from({ length: 20 }, () => ({ ...primordialGenome(rng), ...base, hue: 180, diet: 1, size: 2.5 }));
     expect(clusterSpecies([...a, ...b])).toHaveLength(2);
@@ -107,52 +108,111 @@ describe('World – Schiedsrichter', () => {
   });
 });
 
-describe('Kultur', () => {
-  const quiet = { initialPopulation: 0, minPopulation: 0, maxFood: 0 };
-  it('ohne freigeschaltete Kultur entsteht keine Fähigkeit', () => {
-    const w = new World(cfg({ ...quiet, discoveryRate: 1 }));
-    const o = w.spawn({ ...primordialGenome(w.rng), intellect: 1 }, 100, 100, 1e6);
-    for (let i = 0; i < 50; i++) w.step();
-    expect(skillCount(o.skills)).toBe(0);
+
+const quiet = { initialPopulation: 0, minPopulation: 0, maxFood: 0 };
+const G = (i: number) => 1 << i;
+
+describe('Genetische Fähigkeiten', () => {
+  it('Mutation erzeugt nur genetische Fähigkeiten und beachtet Voraussetzungen', () => {
+    const rng = new Rng(11);
+    let mask = 0;
+    for (let i = 0; i < 20000; i++) mask = mutateSkills(mask, rng, 3);
+    expect(mask & ~GENETIC_MASK).toBe(0);
+    expect(SKILLS.filter((d) => !d.genetic).every((d) => d.requires !== 0)).toBe(true);
   });
-  it('Entdeckungen respektieren den Technologie-Baum', () => {
-    expect(available({ mask: 0, extra: 0 })).toEqual([SKILL.werkzeug, SKILL.sprache]);
-    const w = new World(cfg({ ...quiet, cultureUnlocked: true, discoveryRate: 1, maxPopulation: 1 }));
-    const o = w.spawn({ ...primordialGenome(w.rng), intellect: 1 }, 100, 100, 1e6);
-    for (let i = 0; i < 200; i++) w.step();
-    expect(skillCount(o.skills)).toBeGreaterThan(9); // alle benannten + weitere Erfindungen
-    expect(has(o.skills, SKILL.schrift)).toBe(true);
-  });
-  it('Kinder dummer Eltern erben nichts, Kinder kluger Eltern schon', () => {
-    for (const [intellect, expectSkills] of [[0.1, false], [0.9, true]] as const) {
-      const w = new World(cfg({ ...quiet, cultureUnlocked: true, discoveryRate: 0, transmission: 1 }));
-      w.spawn({ ...primordialGenome(w.rng), intellect }, 100, 100, 1000).skills = { mask: 0b11, extra: 0 };
+  it('nur Gräber kommen an vergrabenes Futter', () => {
+    for (const [skills, expectEaten] of [[0, false], [G(SKILL.graben), true]] as const) {
+      const w = new World(cfg({ ...quiet, maxFood: 1, buriedShare: 1, foodRate: 0 }));
+      (w as unknown as { addFood: (x: number, y: number, l: number, b: boolean) => void }).addFood(102, 100, 10, true);
+      const o = w.spawn({ ...primordialGenome(w.rng), skills, speed: 0.1 }, 100, 100, 30);
       w.step();
-      const child = w.organisms.find((o) => o.age === 0)!;
-      expect(skillCount(child.skills) > 0).toBe(expectSkills);
+      expect(o.eaten > 0).toBe(expectEaten);
     }
   });
-  it('lernt von klügeren Nachbarn', () => {
-    const w = new World(cfg({ ...quiet, cultureUnlocked: true, discoveryRate: 0, learnRate: 1, maxPopulation: 2 }));
-    const g = { ...primordialGenome(w.rng), intellect: 1, speed: 0.1 };
-    const teacher = w.spawn(g, 100, 100, 50);
-    teacher.skills = { mask: 1 << SKILL.werkzeug, extra: 0 };
-    const pupil = w.spawn(g, 110, 100, 50);
-    for (let i = 0; i < 5; i++) w.step();
-    expect(has(pupil.skills, SKILL.werkzeug)).toBe(true);
+  it('Bau schützt vor gleich großen Räubern, Hütte vor allen', () => {
+    const w = new World(cfg(quiet));
+    const pred = w.spawn({ ...primordialGenome(w.rng), size: 1.4, diet: 1 }, 100, 100, 50);
+    const prey = w.spawn({ ...primordialGenome(w.rng), size: 1, diet: 0 }, 103, 100, 50);
+    expect(w.canEat(pred, prey)).toBe(true);
+    prey.genome = { ...prey.genome, skills: G(SKILL.bau) };
+    expect(w.canEat(pred, prey)).toBe(false);
+    prey.genome = { ...prey.genome, skills: 0 };
+    prey.learned = { mask: G(SKILL.huette), extra: 0 };
+    pred.genome = { ...pred.genome, size: 3 };
+    expect(w.canEat(pred, prey)).toBe(false);
   });
-  it('erkennt den Kipppunkt und markiert ihn genau einmal', () => {
-    const w = new World(cfg({ ...quiet, cultureUnlocked: true, discoveryRate: 0, maxPopulation: 20, baseCost: 0, moveCost: 0, senseCost: 0, intellectCost: 0, reproFactor: 1e9 }));
-    for (let i = 0; i < 20; i++) w.spawn({ ...primordialGenome(w.rng), intellect: 0.9 }, 30 * i, 100, 100).skills = { mask: 0b111, extra: 0 };
+});
+
+describe('Kultur', () => {
+  const ready = G(SKILL.graben) | G(SKILL.netz) | G(SKILL.gruppe);
+  it('Anschwung 0 → nie ein Kick', () => {
+    const w = new World(cfg({ ...quiet, cultureBoost: 0, maxPopulation: 1 }));
+    const o = w.spawn({ ...primordialGenome(w.rng), skills: ready }, 100, 100, 1e6);
+    for (let i = 0; i < 300; i++) w.step();
+    expect(o.genome.culture).toBe(false);
+  });
+  it('Kick nur mit genug vererbten Fähigkeiten (Bedingung b)', () => {
+    for (const [skills, expectCulture] of [[G(SKILL.graben), false], [ready, true]] as const) {
+      const w = new World(cfg({ ...quiet, cultureBoost: 150, maxPopulation: 1 }));
+      const o = w.spawn({ ...primordialGenome(w.rng), skills }, 100, 100, 1e6);
+      for (let i = 0; i < 50; i++) w.step();
+      expect(o.genome.culture).toBe(expectCulture);
+    }
+  });
+  it('Kulturträger entdecken auch kulturelle Fähigkeiten, Nicht-Kulturträger nicht', () => {
+    const w = new World(cfg({ ...quiet, cultureBoost: 0, discoveryRate: 1, maxPopulation: 2 }));
+    const c = w.spawn({ ...primordialGenome(w.rng), culture: true }, 100, 100, 1e6);
+    const n = w.spawn({ ...primordialGenome(w.rng) }, 600, 400, 1e6);
+    for (let i = 0; i < 200; i++) w.step();
+    expect(has(c.learned.mask, SKILL.schrift)).toBe(true);
+    expect(popcount(n.learned.mask)).toBe(0);
+  });
+  it('Erlerntes erben nur Kinder von Kulturträgern', () => {
+    for (const culture of [false, true]) {
+      const w = new World(cfg({ ...quiet, cultureBoost: 0, discoveryRate: 0, transmission: 1 }));
+      w.spawn({ ...primordialGenome(w.rng), culture }, 100, 100, 1000).learned = { mask: G(SKILL.werkzeug), extra: 0 };
+      w.step();
+      const child = w.organisms.find((o) => o.age === 0)!;
+      expect(has(child.learned.mask, SKILL.werkzeug)).toBe(culture);
+    }
+  });
+  it('lernt von Artgenossen mit mehr Wissen', () => {
+    const w = new World(cfg({ ...quiet, cultureBoost: 0, discoveryRate: 0, learnRate: 1, maxPopulation: 2 }));
+    const g = { ...primordialGenome(w.rng), culture: true, speed: 0.1 };
+    const teacher = w.spawn(g, 100, 100, 50);
+    teacher.learned = { mask: G(SKILL.werkzeug), extra: 0 };
+    const pupil = w.spawn({ ...g }, 110, 100, 50);
+    for (let i = 0; i < 5; i++) w.step();
+    expect(has(pupil.learned.mask, SKILL.werkzeug)).toBe(true);
+  });
+  it('erkennt den Kipppunkt genau einmal', () => {
+    const w = new World(cfg({ ...quiet, cultureBoost: 0, discoveryRate: 0, maxPopulation: 20, baseCost: 0, moveCost: 0, senseCost: 0, cultureCost: 0, reproFactor: 1e9 }));
+    for (let i = 0; i < 20; i++) w.spawn({ ...primordialGenome(w.rng), culture: true }, 30 * i, 100, 100).learned = { mask: 0b111111111, extra: 0 };
     for (let i = 0; i < 100; i++) w.step();
     expect(w.tippingTick).not.toBeNull();
     expect(w.events.filter((e) => e.label === 'Kipppunkt')).toHaveLength(1);
   });
-  it('Waffen schützen vor Räubern', () => {
-    const w = new World(cfg(quiet));
-    const pred = w.spawn({ ...primordialGenome(w.rng), size: 2.5, diet: 1 }, 100, 100, 50);
-    const armed = w.spawn({ ...primordialGenome(w.rng), size: 0.6, diet: 0 }, 103, 100, 50);
-    armed.skills = { mask: 1 << SKILL.waffen, extra: 0 };
-    expect(w.canEat(pred, armed)).toBe(false);
+  it('available() kennt den Baum', () => {
+    expect(available(0, false)).toEqual(SKILLS.map((d, i) => (d.requires === 0 ? i : -1)).filter((i) => i >= 0));
+  });
+});
+
+describe('Krisen', () => {
+  it('Eiszeit kostet Energie, Feuer/Kleidung/Hütte mildern sie, Bilanz am Ende', () => {
+    const w = new World(cfg({ ...quiet, cultureBoost: 0, reproFactor: 1e9 }));
+    const plain = w.spawn({ ...primordialGenome(w.rng), speed: 0.1 }, 100, 100, 500);
+    const warm = w.spawn({ ...primordialGenome(w.rng), speed: 0.1, size: plain.genome.size, sense: plain.genome.sense }, 500, 400, 500);
+    warm.learned = { mask: G(SKILL.feuer) | G(SKILL.kleidung) | G(SKILL.huette), extra: 0 };
+    w.startCrisis('eiszeit');
+    for (let i = 0; i < 100; i++) w.step();
+    expect(warm.energy).toBeGreaterThan(plain.energy);
+    for (let i = 0; i < 1500; i++) w.step();
+    expect(w.crisis).toBeNull();
+    expect(w.crisisReports).toHaveLength(1);
+  });
+  it('Vulkanwinter tötet sofort einen Teil der Population', () => {
+    const w = new World(cfg({ initialPopulation: 200 }));
+    w.startCrisis('vulkan');
+    expect(w.organisms.filter((o) => o.alive).length).toBeLessThan(170);
   });
 });

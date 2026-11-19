@@ -8,6 +8,30 @@ export type Mode = 'natur' | 'schiedsrichter';
 /** Kriterien des Schiedsrichters. */
 export type Fitness = 'futter' | 'rot' | 'groesse' | 'strecke';
 
+/** Krisen, die per Button (oder zufällig) ausgelöst werden. */
+export type CrisisKind = 'eiszeit' | 'duerre' | 'vulkan';
+
+export interface CrisisDef {
+  label: string;
+  icon: string;
+  duration: number;
+  /** Multiplikator fürs Futterwachstum. */
+  food: number;
+  /** Kältestärke (Energiekosten, gemildert durch Bau, Feuer, Kleidung, Hütte). */
+  cold: number;
+  /** Anteil, der sofort stirbt. */
+  shock: number;
+  /** Anteil des Oberflächenfutters, der pro Tick verdirbt (vergrabenes bleibt). */
+  decay: number;
+  tint: string;
+}
+
+export const CRISES: Record<CrisisKind, CrisisDef> = {
+  eiszeit: { label: 'Eiszeit', icon: '❄️', duration: 1500, food: 0.4, cold: 1, shock: 0, decay: 0, tint: 'rgba(120,170,255,0.16)' },
+  duerre: { label: 'Dürre', icon: '☀️', duration: 1000, food: 0.15, cold: 0, shock: 0, decay: 0.01, tint: 'rgba(240,190,60,0.16)' },
+  vulkan: { label: 'Vulkanwinter', icon: '🌋', duration: 800, food: 0.1, cold: 1.5, shock: 0.3, decay: 0.005, tint: 'rgba(90,90,90,0.22)' },
+};
+
 export const FITNESS_LABELS: Record<Fitness, string> = {
   futter: 'Wer am meisten frisst',
   rot: 'Wer am rötesten ist',
@@ -60,14 +84,24 @@ export interface SimConfig {
 
   mutationRate: number;
 
-  /** Kultur: Fähigkeiten können entdeckt, gelernt und weitergegeben werden. */
-  cultureUnlocked: boolean;
-  /** Energiekosten des Gehirns pro Tick bei Intelligenz 1. */
-  intellectCost: number;
-  /** Grundwahrscheinlichkeit pro Tick, eine Fähigkeit zu entdecken (× Intelligenz²). */
+  /** Anteil des Futters, der vergraben liegt (nur für Gräber erreichbar). */
+  buriedShare: number;
+  /** Energiekosten der Kälte pro Tick und Flächeneinheit (in Kältekrisen). */
+  coldCost: number;
+  randomCrises: boolean;
+
+  /**
+   * Kultur-Anschwung 0..100: wie wahrscheinlich der glückliche „Kick“ ist (Harari).
+   * 0 = Kultur unmöglich. Der Kick trifft nur Lebewesen mit genug genetischen Fähigkeiten;
+   * ob er sich durchsetzt, hängt davon ab, ob genug Artgenossen da sind, von denen man lernt.
+   */
+  cultureBoost: number;
+  /** Bedingung b): so viele genetische Fähigkeiten braucht ein Lebewesen für den Kick. */
+  kickMinSkills: number;
+  /** Energiekosten der Kulturfähigkeit (großes Gehirn) pro Tick. */
+  cultureCost: number;
+  /** Wahrscheinlichkeit pro Tick, als Kulturträger etwas zu entdecken (× (1 + 0,2 · Fähigkeiten)). */
   discoveryRate: number;
-  /** Ab dieser Intelligenz kann von anderen gelernt und an Kinder weitergegeben werden. */
-  learnThreshold: number;
   learnRate: number;
   /** Wahrscheinlichkeit, dass eine Fähigkeit an ein Kind weitergegeben wird (ohne Schrift). */
   transmission: number;
@@ -92,7 +126,7 @@ export function defaultConfig(): SimConfig {
     maxPopulation: 900,
 
     maxFood: 1400,
-    foodRate: 3,
+    foodRate: 3.5,
     oxygen: 1,
     foodEnergy: 14,
     foodRadius: 2,
@@ -119,10 +153,14 @@ export function defaultConfig(): SimConfig {
 
     mutationRate: 1,
 
-    cultureUnlocked: false,
-    intellectCost: 0.06,
-    discoveryRate: 0.01,
-    learnThreshold: 0.3,
+    buriedShare: 0.35,
+    coldCost: 0.05,
+    randomCrises: false,
+
+    cultureBoost: 50,
+    kickMinSkills: 3,
+    cultureCost: 0.015,
+    discoveryRate: 0.004,
     learnRate: 0.05,
     transmission: 0.85,
     farmRate: 0.05,
@@ -131,4 +169,9 @@ export function defaultConfig(): SimConfig {
     judgePopulation: 150,
     eliteFraction: 0.2,
   };
+}
+
+/** Kick-Wahrscheinlichkeit pro Tick und berechtigtem Lebewesen (logarithmische Skala). */
+export function kickRate(boost: number): number {
+  return boost <= 0 ? 0 : 1e-6 * Math.pow(10, boost / 25);
 }

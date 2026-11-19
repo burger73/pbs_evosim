@@ -1,9 +1,9 @@
 import './style.css';
-import { defaultConfig, FITNESS_LABELS, type Fitness, type Mode, type SimConfig } from '../core/config.ts';
+import { CRISES, defaultConfig, FITNESS_LABELS, type CrisisKind, type Fitness, type Mode, type SimConfig } from '../core/config.ts';
 import { LIMITS } from '../core/genome.ts';
-import { SKILLS, has, skillCount } from '../core/skills.ts';
+import { SKILLS, has } from '../core/skills.ts';
 import { TIPPING_SHARE, TIPPING_SKILLS, World, type Organism } from '../core/world.ts';
-import { css, drawChart, drawWorld } from './render.ts';
+import { css, drawChart, drawSpeciesChart, drawWorld } from './render.ts';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -12,10 +12,11 @@ if (params.has('embed')) document.body.classList.add('embed');
 
 const worldCanvas = $<HTMLCanvasElement>('world');
 const chartPop = $<HTMLCanvasElement>('chartPop');
+const chartSpecies = $<HTMLCanvasElement>('chartSpecies');
 const chartTraits = $<HTMLCanvasElement>('chartTraits');
-const chartSkills = $<HTMLCanvasElement>('chartSkills');
-const cultureBtn = $<HTMLButtonElement>('culture');
 const statsEl = $('stats');
+const cultureEl = $('cultureStatus');
+const reportEl = $('report');
 const selectedEl = $('selected');
 const playBtn = $<HTMLButtonElement>('play');
 const eyesBtn = $<HTMLButtonElement>('eyes');
@@ -24,6 +25,9 @@ const seedIn = $<HTMLInputElement>('seed');
 const speedIn = $<HTMLInputElement>('speed');
 const mutIn = $<HTMLInputElement>('mutation');
 const oxyIn = $<HTMLInputElement>('oxygen');
+const boostIn = $<HTMLInputElement>('boost');
+const randomIn = $<HTMLInputElement>('randomCrises');
+const crisisBtns = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-crisis]'));
 
 for (const [k, label] of Object.entries(FITNESS_LABELS)) fitnessSel.add(new Option(label, k));
 
@@ -32,6 +36,7 @@ let world: World;
 let running = true;
 let selected: Organism | null = null;
 let frame = 0;
+let shownReports = 0;
 
 function currentMode(): Mode {
   return (document.querySelector('input[name="mode"]:checked') as HTMLInputElement).value as Mode;
@@ -45,38 +50,43 @@ function restart(): void {
     fitness: fitnessSel.value as Fitness,
     mutationRate: Number(mutIn.value),
     oxygen: Number(oxyIn.value),
+    cultureBoost: Number(boostIn.value),
+    randomCrises: randomIn.checked,
   };
   world = new World(cfg);
   selected = null;
   selectedEl.hidden = true;
+  reportEl.hidden = true;
+  shownReports = 0;
   eyesBtn.disabled = false;
   eyesBtn.textContent = '👁 Augen freischalten';
-  cultureBtn.disabled = false;
-  cultureBtn.textContent = '🧠 Kultur freischalten';
   document.body.classList.toggle('mode-natur', cfg.mode === 'natur');
   document.body.classList.toggle('mode-schiedsrichter', cfg.mode === 'schiedsrichter');
   if (cfg.mode === 'schiedsrichter') world.addEvent(`Schiedsrichter: ${FITNESS_LABELS[cfg.fitness]}`);
 }
 
-/** ?vorlauf=N rechnet N Schritte vor; ?augen=T / ?kultur=T schalten bei Schritt T frei (auch ohne Vorlauf: wartet bis T). */
-const eyesAt = params.has('augen') ? Number(params.get('augen')) : -1;
-const cultureAt = params.has('kultur') ? Number(params.get('kultur')) : -1;
+// --- Geplante Ereignisse per URL: ?augen=T ?eiszeit=T ?duerre=T ?vulkan=T ----------
+const planned: [number, () => void][] = [];
+if (params.has('augen')) planned.push([Number(params.get('augen')), () => { if (!cfg.eyesUnlocked) eyesBtn.click(); }]);
+for (const kind of Object.keys(CRISES) as CrisisKind[]) {
+  if (params.has(kind)) planned.push([Number(params.get(kind)), () => world.startCrisis(kind)]);
+}
 function scheduled(): void {
-  if (world.tick === eyesAt && !cfg.eyesUnlocked) eyesBtn.click();
-  if (world.tick === cultureAt && !cfg.cultureUnlocked) cultureBtn.click();
+  for (const [t, fn] of planned) if (world.tick === t) fn();
 }
 function prerun(): void {
   const n = Math.min(50000, Number(params.get('vorlauf') ?? 0));
-  for (let i = 0; i < n; i++) {
-    scheduled();
-    world.step();
-  }
+  for (let i = 0; i < n; i++) { scheduled(); world.step(); }
 }
+
+const boostLabel = (v: number) =>
+  v === 0 ? 'aus – Kultur unmöglich' : v <= 20 ? 'sehr selten' : v <= 45 ? 'selten' : v <= 65 ? 'mittel' : v <= 85 ? 'häufig' : 'fast sicher';
 
 function updateOutputs(): void {
   $('speedOut').textContent = `${speedIn.value}× pro Bild`;
   $('mutOut').textContent = `${Number(mutIn.value).toFixed(1)}×`;
   $('oxyOut').textContent = `${Number(oxyIn.value).toFixed(1)}×`;
+  $('boostOut').textContent = `${boostIn.value} · ${boostLabel(Number(boostIn.value))}`;
 }
 
 // --- Bedienelemente ----------------------------------------------------
@@ -93,18 +103,16 @@ mutIn.addEventListener('input', () => { cfg.mutationRate = Number(mutIn.value); 
 mutIn.addEventListener('change', () => world.addEvent(`Mutation ${Number(mutIn.value).toFixed(1)}×`));
 oxyIn.addEventListener('input', () => { cfg.oxygen = Number(oxyIn.value); updateOutputs(); });
 oxyIn.addEventListener('change', () => world.addEvent(`O₂ ${Number(oxyIn.value).toFixed(1)}×`));
-cultureBtn.addEventListener('click', () => {
-  cfg.cultureUnlocked = true;
-  world.addEvent('Kultur');
-  cultureBtn.disabled = true;
-  cultureBtn.textContent = '🧠 Kultur ist freigeschaltet';
-});
+boostIn.addEventListener('input', () => { cfg.cultureBoost = Number(boostIn.value); updateOutputs(); });
+boostIn.addEventListener('change', () => world.addEvent(`Anschwung ${boostIn.value}`));
+randomIn.addEventListener('change', () => { cfg.randomCrises = randomIn.checked; });
 eyesBtn.addEventListener('click', () => {
   cfg.eyesUnlocked = true;
   world.addEvent('Augen');
   eyesBtn.disabled = true;
   eyesBtn.textContent = '👁 Augen sind freigeschaltet';
 });
+for (const b of crisisBtns) b.addEventListener('click', () => world.startCrisis(b.dataset.crisis as CrisisKind));
 
 worldCanvas.addEventListener('click', (ev) => {
   const rect = worldCanvas.getBoundingClientRect();
@@ -125,28 +133,29 @@ const bar = (v: number, [lo, hi]: readonly [number, number]) => {
   const n = Math.round(((v - lo) / (hi - lo)) * 10);
   return '▮'.repeat(n) + '▯'.repeat(10 - n);
 };
+const icons = (mask: number) => SKILLS.filter((_, i) => has(mask, i)).map((d) => `<span title="${d.label}: ${d.effect}">${d.icon}</span>`).join(' ');
 
 function renderSelected(): void {
   if (!selected) { selectedEl.hidden = true; return; }
   const o = selected;
   const g = o.genome;
+  const learnedOnly = o.learned.mask & ~g.skills;
   selectedEl.hidden = false;
   selectedEl.innerHTML = `
     <h3><span class="swatch" style="background:hsl(${g.hue} 65% 52%)"></span>
       Lebewesen #${o.id} ${o.alive ? '' : '† (gestorben)'}</h3>
     <dl>
-      <dt>Rolle</dt><dd>${world.isPredator(o) ? 'Räuber' : 'Pflanzenfresser'}</dd>
+      <dt>Rolle</dt><dd>${g.culture ? '🧠 Kulturträger' : world.isPredator(o) ? 'Räuber' : 'Pflanzenfresser'}</dd>
       <dt>Größe</dt><dd>${bar(g.size, LIMITS.size)} ${g.size.toFixed(2)}</dd>
       <dt>Tempo</dt><dd>${bar(g.speed, LIMITS.speed)} ${g.speed.toFixed(2)}</dd>
       <dt>Sicht</dt><dd>${bar(g.sense, LIMITS.sense)} ${g.sense.toFixed(2)}</dd>
       <dt>Ernährung</dt><dd>${bar(g.diet, LIMITS.diet)} ${(g.diet * 100).toFixed(0)} % Räuber</dd>
-      <dt>Intelligenz</dt><dd>${bar(g.intellect, LIMITS.intellect)} ${g.intellect.toFixed(2)}${world.isCultural(o) ? ' · Kulturträger' : ''}</dd>
-      <dt>Fähigkeiten</dt><dd>${skillCount(o.skills)}${o.skills.extra ? ` (davon ${o.skills.extra} weitere Erfindungen)` : ''}</dd>
+      <dt>Vererbt</dt><dd class="skills">${icons(g.skills) || '–'}</dd>
+      <dt>Gelernt</dt><dd class="skills">${icons(learnedOnly) || '–'}${o.learned.extra ? ` <small>+ ${o.learned.extra} Erfindungen</small>` : ''}</dd>
       <dt>Energie</dt><dd>${o.energy.toFixed(0)}</dd>
       <dt>Alter</dt><dd>${o.age}</dd>
       <dt>Vorfahren</dt><dd>${o.lineage} Generationen bis zur Urform</dd>
-    </dl>
-    <div class="skills" title="${SKILLS.filter((_, i) => has(o.skills, i)).map((d) => `${d.label}: ${d.effect}`).join('\n')}">${SKILLS.filter((_, i) => has(o.skills, i)).map((d) => d.icon).join(' ')}</div>`;
+    </dl>`;
 }
 
 function renderStats(): void {
@@ -154,43 +163,68 @@ function renderStats(): void {
   const parts = [
     `Zeit <b>${world.tick}</b>`,
     `Population <b>${world.organisms.length}</b>`,
-    `Räuber <b>${s?.predators ?? 0}</b>`,
+    `wilde Räuber <b>${s.predators}</b>`,
     `Arten <b>${world.speciesCount}</b>`,
+    `Ø Fähigkeiten <b>${s.avgSkills < 10 ? s.avgSkills.toFixed(1) : Math.round(s.avgSkills)}</b>`,
   ];
-  if (cfg.cultureUnlocked) {
-    parts.push(`Kulturträger <b>${Math.round((s?.topShare ?? 0) * 100)} %</b>`, `Rekord <b>${s?.maxSkills ?? 0}</b> Fähigkeiten`);
-    if (world.tippingTick !== null) {
-      parts.push(`<b class="tipped">⚡ Kipppunkt bei ${world.tippingTick}</b> (${world.tippingTick - (world.cultureSince ?? 0)} nach Kultur)`);
-    } else {
-      // Frühwarnung: wie nah sind Anteil und Wissen der Kulturträger an der Schwelle?
-      const share = Math.min(1, (s?.topShare ?? 0) / TIPPING_SHARE);
-      const know = Math.min(1, (s?.topSkills ?? 0) / TIPPING_SKILLS);
-      parts.push(`Inkubation · Anteil <b>${Math.round(share * 100)} %</b> · Wissen <b>${Math.round(know * 100)} %</b> der Schwelle`);
-    }
-  }
   if (cfg.mode === 'schiedsrichter') parts.push(`Generation <b>${world.generation}</b>`);
+  if (world.crisis) {
+    const def = CRISES[world.crisis.kind];
+    parts.push(`<b class="crisis">${def.icon} ${def.label}: noch ${world.crisis.until - world.tick}</b>`);
+  }
   statsEl.innerHTML = parts.map((p) => `<span>${p}</span>`).join('');
+  for (const b of crisisBtns) b.disabled = !!world.crisis;
+
+  if (cfg.mode !== 'natur') { cultureEl.innerHTML = ''; return; }
+  const c: string[] = [];
+  if (cfg.cultureBoost === 0) c.push('Kultur: <b>aus</b> (Anschwung 0)');
+  else if (world.tippingTick !== null) {
+    c.push(`<b class="tipped">⚡ Kipppunkt bei ${world.tippingTick}</b>`, `Kulturträger <b>${Math.round(s.cultureShare * 100)} %</b>`, `Rekord <b>${s.maxSkills}</b> Fähigkeiten`);
+  } else if (s.cultureShare > 0) {
+    c.push(`🔥 Funke! Kulturträger <b>${Math.round(s.cultureShare * 100)} %</b> (Schwelle ${TIPPING_SHARE * 100} %)`, `ihr Wissen <b>${s.cultureSkills.toFixed(1)}</b> (Schwelle ${TIPPING_SKILLS})`);
+  } else {
+    c.push(`Kultur: noch kein Funke`, `kick-bereit (≥ ${cfg.kickMinSkills} vererbte Fähigkeiten): <b>${s.kickReady}</b>`);
+    if (world.firstSpark !== null) c.push('<span class="muted">(frühere Funken verpufft)</span>');
+  }
+  cultureEl.innerHTML = c.map((p) => `<span>${p}</span>`).join('');
+}
+
+function renderReport(): void {
+  if (world.crisisReports.length === shownReports) return;
+  shownReports = world.crisisReports.length;
+  const r = world.crisisReports[shownReports - 1];
+  const def = CRISES[r.kind];
+  const rows = r.buckets
+    .filter((b) => b.before > 0 || b.after > 0)
+    .map((b) => {
+      const f = b.before ? b.after / b.before : NaN;
+      const txt = b.before === 0 ? 'neu' : f === 0 ? 'ausgelöscht' : `×${f < 10 ? f.toFixed(2) : Math.round(f)}`;
+      return `<tr><td>${b.label}</td><td>${b.before}</td><td>${b.after}</td><td class="${f >= 1 || b.before === 0 ? 'up' : 'down'}">${txt}</td></tr>`;
+    })
+    .join('');
+  reportEl.hidden = false;
+  reportEl.innerHTML = `
+    <h3>${def.icon} Bilanz ${def.label} (${r.start}–${r.end})</h3>
+    <table><thead><tr><th>Fähigkeiten</th><th>vorher</th><th>nachher</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+    <p>Arten ausgestorben: <b>${r.extinct.count}</b>${r.extinct.count ? ` (Ø ${r.extinct.avgSkills.toFixed(1)} Fähigkeiten)` : ''} ·
+       überlebt: <b>${r.survived.count}</b>${r.survived.count ? ` (Ø ${r.survived.avgSkills.toFixed(1)})` : ''}</p>`;
 }
 
 function renderCharts(): void {
   const samples = world.samples;
   drawChart(chartPop, samples, [
-    { color: css('--pop'), value: (s) => s.population - s.predators },
+    { color: css('--pop'), value: (s) => s.population * (1 - s.cultureShare) - s.predators },
     { color: css('--pred'), value: (s) => s.predators },
+    { color: css('--cult'), value: (s) => s.population * s.cultureShare },
     { color: css('--spec'), value: (s) => s.species, axis: 'right' },
   ], world.events);
+  drawSpeciesChart(chartSpecies, world.census, world.events);
   drawChart(chartTraits, samples, [
     { color: css('--size'), value: (s) => (s.avgSize - LIMITS.size[0]) / (LIMITS.size[1] - LIMITS.size[0]) },
     { color: css('--speed'), value: (s) => (s.avgSpeed - LIMITS.speed[0]) / (LIMITS.speed[1] - LIMITS.speed[0]) },
     { color: css('--sense'), value: (s) => s.avgSense },
     { color: css('--diet'), value: (s) => s.avgDiet },
-    { color: css('--intel'), value: (s) => s.avgIntellect },
   ], world.events, 1);
-  drawChart(chartSkills, samples, [
-    { color: css('--cult'), value: (s) => s.topSkills },
-    { color: css('--rest'), value: (s) => s.otherSkills },
-    { color: css('--share'), value: (s) => s.topShare, axis: 'right' },
-  ], world.events);
 }
 
 function loop(): void {
@@ -202,12 +236,14 @@ function loop(): void {
   if (frame++ % 10 === 0) {
     renderStats();
     renderCharts();
+    renderReport();
     if (selected) renderSelected();
   }
   requestAnimationFrame(loop);
 }
 
 if (params.has('seed')) seedIn.value = params.get('seed')!;
+if (params.has('anschwung')) boostIn.value = params.get('anschwung')!;
 updateOutputs();
 restart();
 prerun();

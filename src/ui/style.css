@@ -6,6 +6,7 @@
   --border: #dedcd6;
   --world: #fbfaf7;
   --food: #6aa84f;
+  --buried: #9b7a4f;
   --accent: #2f6fdf;
   --pop: #3b9b5a;
   --pred: #d1453b;
@@ -29,6 +30,7 @@
     --border: #2e3135;
     --world: #101113;
     --food: #4f8a3a;
+    --buried: #7a5f3c;
     --accent: #6d9cf0;
     --pop: #5cc27d;
     --pred: #ef6a5f;
@@ -121,3 +123,21 @@ figcaption { font-size: 0.82rem; color: var(--muted); margin-bottom: 4px; }
 
 body.mode-natur .judge-only { display: none; }
 body.mode-schiedsrichter .nature-only { display: none; }
+
+.chart.tall { height: 160px; }
+.stats .crisis { color: var(--pred); }
+.stats .muted { color: var(--muted); }
+#cultureStatus { margin-top: 2px; }
+.check { flex-direction: row; align-items: center; gap: 6px; }
+.crisis-buttons button { flex: 1 1 auto; }
+.report {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
+  font-variant-numeric: tabular-nums;
+}
+.report h3 { margin: 0 0 6px; font-size: 1rem; }
+.report table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.report th, .report td { text-align: right; padding: 2px 6px; }
+.report th:first-child, .report td:first-child { text-align: left; }
+.report td.up { color: var(--pop); } .report td.down { color: var(--pred); }
+.report p { margin: 6px 0 0; font-size: 0.88rem; color: var(--muted); }
+.selected .skills { font-size: 1.05rem; letter-spacing: 1px; }
