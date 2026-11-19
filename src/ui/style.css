@@ -7,6 +7,7 @@
   --world: #fbfaf7;
   --food: #6aa84f;
   --buried: #9b7a4f;
+  --faint: rgba(120,120,120,0.28);
   --accent: #2f6fdf;
   --pop: #3b9b5a;
   --pred: #d1453b;
@@ -31,6 +32,7 @@
     --world: #101113;
     --food: #4f8a3a;
     --buried: #7a5f3c;
+    --faint: rgba(160,160,160,0.25);
     --accent: #6d9cf0;
     --pop: #5cc27d;
     --pred: #ef6a5f;
@@ -141,3 +143,11 @@ body.mode-schiedsrichter .nature-only { display: none; }
 .report td.up { color: var(--pop); } .report td.down { color: var(--pred); }
 .report p { margin: 6px 0 0; font-size: 0.88rem; color: var(--muted); }
 .selected .skills { font-size: 1.05rem; letter-spacing: 1px; }
+
+.leader {
+  margin-top: 8px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--panel); display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px;
+  font-variant-numeric: tabular-nums;
+}
+.leader .swatch { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+.leader .muted { color: var(--muted); }

@@ -16,7 +16,7 @@ export function fitCanvas(canvas: HTMLCanvasElement, worldW?: number): number {
   return worldW ? w / worldW : dpr;
 }
 
-export function drawWorld(canvas: HTMLCanvasElement, world: World, selected: Organism | null): void {
+export function drawWorld(canvas: HTMLCanvasElement, world: World, selected: Organism | null, zoom = 1): void {
   const ctx = canvas.getContext('2d')!;
   const k = fitCanvas(canvas, world.cfg.width);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -38,7 +38,7 @@ export function drawWorld(canvas: HTMLCanvasElement, world: World, selected: Org
   const predColor = css('--pred');
   const cultColor = css('--cult');
   for (const o of world.organisms) {
-    const r = world.radius(o) * k;
+    const r = world.radius(o) * k * zoom;
     const x = o.x * k, y = o.y * k;
     const pred = world.isPredator(o) && !o.genome.culture;
     ctx.beginPath();
@@ -152,7 +152,7 @@ export function drawChart(canvas: HTMLCanvasElement, samples: readonly Sample[],
 }
 
 /** Messlatte: eine Linie pro Art (Farbe der Art), Fähigkeiten logarithmisch. */
-export function drawSpeciesChart(canvas: HTMLCanvasElement, census: readonly Census[], events: readonly SimEvent[]): void {
+export function drawSpeciesChart(canvas: HTMLCanvasElement, census: readonly Census[], events: readonly SimEvent[], leaderId: number | null): void {
   const ctx = canvas.getContext('2d')!;
   const dpr = fitCanvas(canvas);
   const W = canvas.width, H = canvas.height;
@@ -180,22 +180,29 @@ export function drawSpeciesChart(canvas: HTMLCanvasElement, census: readonly Cen
   drawEvents(ctx, events, t0, xOf, H, dpr);
 
   // Linien pro Art
-  const lines = new Map<number, { hue: number; culture: boolean; pts: [number, number][] }>();
+  const lines = new Map<number, { hue: number; pts: [number, number][] }>();
   for (const c of census) {
     for (const s of c.species) {
       if (s.members < 5) continue;
       let l = lines.get(s.id);
-      if (!l) { l = { hue: s.hue, culture: false, pts: [] }; lines.set(s.id, l); }
-      if (s.culture > 0.5) l.culture = true;
+      if (!l) { l = { hue: s.hue, pts: [] }; lines.set(s.id, l); }
       l.pts.push([xOf(c.tick), yOf(s.skills)]);
     }
   }
-  for (const l of lines.values()) {
-    if (l.pts.length < 2) continue;
-    ctx.strokeStyle = `hsl(${l.hue} 65% 45%)`;
-    ctx.lineWidth = (l.culture ? 2.6 : 1.3) * dpr;
+  // farbig: Spitzenreiter + die 4 größten Arten der letzten Zählung; alle anderen blass
+  const last = census[census.length - 1].species;
+  const highlighted = new Set([...last].sort((a, b) => b.members - a.members).slice(0, 4).map((s) => s.id));
+  if (leaderId !== null) highlighted.add(leaderId);
+  const draw = (id: number, l: { hue: number; pts: [number, number][] }) => {
+    if (l.pts.length < 2) return;
+    const lead = id === leaderId;
+    ctx.strokeStyle = highlighted.has(id) ? `hsl(${l.hue} 65% 45%)` : css('--faint');
+    ctx.lineWidth = (lead ? 3.2 : highlighted.has(id) ? 1.6 : 1) * dpr;
     ctx.beginPath();
     l.pts.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
     ctx.stroke();
-  }
+  };
+  for (const [id, l] of lines) if (!highlighted.has(id)) draw(id, l); // blasse zuerst, farbige obendrauf
+  for (const [id, l] of lines) if (highlighted.has(id) && id !== leaderId) draw(id, l);
+  if (leaderId !== null && lines.has(leaderId)) draw(leaderId, lines.get(leaderId)!);
 }

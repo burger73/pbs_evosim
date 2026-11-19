@@ -58,7 +58,23 @@ export interface SpeciesStat {
   /** Anteil Kulturträger (0..1). */
   culture: number;
   predator: boolean;
+  /** Fähigkeiten, die mehr als die Hälfte der Art hat. */
+  common: number;
 }
+
+/** Die Art mit den meisten Fähigkeiten (Ø) – der Spitzenreiter. */
+export interface Leader {
+  id: number;
+  hue: number;
+  skills: number;
+  members: number;
+  culture: number;
+  common: number;
+  since: number;
+}
+
+/** Spitzenreiter zählen erst ab dieser Größe; Wechsel braucht 15 % Vorsprung, 3 Zählungen in Folge. */
+export const LEADER_MIN_MEMBERS = 10;
 
 export interface Census {
   tick: number;
@@ -109,6 +125,8 @@ export class World {
   census: Census[] = [];
   events: SimEvent[] = [];
   speciesCount = 1;
+  leader: Leader | null = null;
+  private challenger: { id: number; streak: number } | null = null;
 
   crisis: { kind: CrisisKind; until: number; start: number } | null = null;
   crisisReports: CrisisReport[] = [];
@@ -660,11 +678,16 @@ export class World {
       rec.rep = c.representative;
       used.add(rec.id);
       let skills = 0, cult = 0, pred = 0;
+      const bitCount = new Array(16).fill(0);
       for (const i of c.indices) {
         skills += this.skillCount(os[i]);
         if (os[i].genome.culture) cult++;
         if (this.isPredator(os[i])) pred++;
+        const m = this.skillsOf(os[i]);
+        for (let b = 0; b < 16; b++) if ((m >> b) & 1) bitCount[b]++;
       }
+      let common = 0;
+      for (let b = 0; b < 16; b++) if (bitCount[b] * 2 > c.indices.length) common |= 1 << b;
       stats.push({
         id: rec.id,
         hue: rec.hue,
@@ -672,13 +695,42 @@ export class World {
         skills: skills / c.indices.length,
         culture: cult / c.indices.length,
         predator: pred > c.indices.length / 2,
+        common,
       });
     }
+    this.updateLeader(stats);
     // Registry schlank halten: nur Arten, die gerade leben
     this.speciesRegistry = this.speciesRegistry.filter((s) => used.has(s.id));
     this.speciesCount = stats.length;
     this.census.push({ tick: this.tick, species: stats });
     if (this.census.length > MAX_CENSUS) this.census.splice(0, this.census.length - MAX_CENSUS);
+  }
+
+  /** Spitzenreiter bestimmen – mit Hysterese, damit er nicht bei jeder Zählung flackert. */
+  private updateLeader(stats: SpeciesStat[]): void {
+    const eligible = stats.filter((s) => s.members >= LEADER_MIN_MEMBERS && s.skills >= 1);
+    if (!eligible.length) return;
+    const best = eligible.reduce((a, b) => (b.skills > a.skills ? b : a));
+    const current = this.leader ? stats.find((s) => s.id === this.leader!.id && s.members >= LEADER_MIN_MEMBERS) : undefined;
+    const toLeader = (s: SpeciesStat, since: number): Leader => ({ id: s.id, hue: s.hue, skills: s.skills, members: s.members, culture: s.culture, common: s.common, since });
+    if (!current) {
+      // kein (lebender) Spitzenreiter → sofort übernehmen
+      if (this.leader) this.addEvent('🏆 Wechsel');
+      this.leader = toLeader(best, this.tick);
+      this.challenger = null;
+      return;
+    }
+    this.leader = toLeader(current, this.leader!.since);
+    if (best.id !== current.id && best.skills > current.skills * 1.15) {
+      this.challenger = this.challenger?.id === best.id ? { id: best.id, streak: this.challenger.streak + 1 } : { id: best.id, streak: 1 };
+      if (this.challenger.streak >= 3) {
+        this.leader = toLeader(best, this.tick);
+        this.challenger = null;
+        this.addEvent('🏆 Wechsel');
+      }
+    } else {
+      this.challenger = null;
+    }
   }
 
   /** Kipppunkt: ≥ 10 % Kulturträger mit Ø ≥ 5 Fähigkeiten, 5 Messungen in Folge. */

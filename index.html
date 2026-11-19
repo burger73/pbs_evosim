@@ -22,6 +22,7 @@
         <canvas id="world" aria-label="Simulationswelt"></canvas>
         <div class="stats" id="stats"></div>
         <div class="stats" id="cultureStatus"></div>
+        <div class="leader" id="leader" hidden></div>
       </section>
 
       <aside class="panel">
@@ -43,6 +44,9 @@
           </div>
           <label>Tempo <output id="speedOut"></output>
             <input id="speed" type="range" min="1" max="30" value="4" />
+          </label>
+          <label>Darstellungsgröße <output id="zoomOut"></output>
+            <input id="zoom" type="range" min="1" max="3" step="0.25" value="1.5" />
           </label>
           <label>Mutation <output id="mutOut"></output>
             <input id="mutation" type="range" min="0" max="3" step="0.1" value="1" />
@@ -75,7 +79,7 @@
           <canvas id="chartPop" class="chart"></canvas>
         </figure>
         <figure class="nature-only">
-          <figcaption>Messlatte: Fähigkeiten je Art (Linienfarbe = Art, logarithmisch)</figcaption>
+          <figcaption>Messlatte: Fähigkeiten je Art (logarithmisch) · dick = 🏆 Spitzenreiter · farbig = die 4 größten Arten</figcaption>
           <canvas id="chartSpecies" class="chart tall"></canvas>
         </figure>
         <figure>

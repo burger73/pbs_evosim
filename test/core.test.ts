@@ -197,6 +197,19 @@ describe('Kultur', () => {
   });
 });
 
+describe('Spitzenreiter', () => {
+  it('ist die Art mit den meisten Fähigkeiten (Durchschnitt), nicht die größte', () => {
+    const w = new World(cfg({ ...quiet, cultureBoost: 0, reproFactor: 1e9, baseCost: 0, moveCost: 0, senseCost: 0 }));
+    const base = { speed: 0.1, sense: 0.3, diet: 0, size: 1 };
+    for (let i = 0; i < 40; i++) w.spawn({ ...primordialGenome(w.rng), ...base, hue: 180, skills: 0 }, 20 * i, 300, 100);
+    for (let i = 0; i < 15; i++) w.spawn({ ...primordialGenome(w.rng), ...base, hue: 0, skills: G(SKILL.graben) | G(SKILL.netz) }, 20 * i, 600, 100);
+    for (let i = 0; i < 50; i++) w.step();
+    expect(w.leader).not.toBeNull();
+    expect(hueDistance(w.leader!.hue, 0)).toBeLessThan(30);
+    expect(has(w.leader!.common, SKILL.graben)).toBe(true);
+  });
+});
+
 describe('Krisen', () => {
   it('Eiszeit kostet Energie, Feuer/Kleidung/Hütte mildern sie, Bilanz am Ende', () => {
     const w = new World(cfg({ ...quiet, cultureBoost: 0, reproFactor: 1e9 }));

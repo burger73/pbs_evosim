@@ -27,6 +27,8 @@ const mutIn = $<HTMLInputElement>('mutation');
 const oxyIn = $<HTMLInputElement>('oxygen');
 const boostIn = $<HTMLInputElement>('boost');
 const randomIn = $<HTMLInputElement>('randomCrises');
+const zoomIn = $<HTMLInputElement>('zoom');
+const leaderEl = $('leader');
 const crisisBtns = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-crisis]'));
 
 for (const [k, label] of Object.entries(FITNESS_LABELS)) fitnessSel.add(new Option(label, k));
@@ -84,6 +86,7 @@ const boostLabel = (v: number) =>
 
 function updateOutputs(): void {
   $('speedOut').textContent = `${speedIn.value}× pro Bild`;
+  $('zoomOut').textContent = `${Number(zoomIn.value).toFixed(2).replace(/\.?0+$/, '')}×`;
   $('mutOut').textContent = `${Number(mutIn.value).toFixed(1)}×`;
   $('oxyOut').textContent = `${Number(oxyIn.value).toFixed(1)}×`;
   $('boostOut').textContent = `${boostIn.value} · ${boostLabel(Number(boostIn.value))}`;
@@ -99,6 +102,7 @@ playBtn.addEventListener('click', () => {
   playBtn.textContent = running ? '⏸ Pause' : '▶ Weiter';
 });
 speedIn.addEventListener('input', updateOutputs);
+zoomIn.addEventListener('input', updateOutputs);
 mutIn.addEventListener('input', () => { cfg.mutationRate = Number(mutIn.value); updateOutputs(); });
 mutIn.addEventListener('change', () => world.addEvent(`Mutation ${Number(mutIn.value).toFixed(1)}×`));
 oxyIn.addEventListener('input', () => { cfg.oxygen = Number(oxyIn.value); updateOutputs(); });
@@ -189,6 +193,18 @@ function renderStats(): void {
   cultureEl.innerHTML = c.map((p) => `<span>${p}</span>`).join('');
 }
 
+function renderLeader(): void {
+  const l = world.leader;
+  if (!l || cfg.mode !== 'natur') { leaderEl.hidden = true; return; }
+  leaderEl.hidden = false;
+  const sk = l.skills < 10 ? l.skills.toFixed(1) : String(Math.round(l.skills));
+  leaderEl.innerHTML = `🏆 <b>Spitzenreiter</b>
+    <span class="swatch" style="background:hsl(${l.hue} 65% 52%)"></span> Art ${l.id}
+    · Ø <b>${sk}</b> Fähigkeiten · <b>${l.members}</b> Tiere${l.culture > 0.5 ? ' · 🧠 Kultur' : ''}
+    · <span class="skills">${icons(l.common) || '–'}</span>
+    · führt seit ${l.since} <span class="muted">(${world.tick - l.since} Schritte)</span>`;
+}
+
 function renderReport(): void {
   if (world.crisisReports.length === shownReports) return;
   shownReports = world.crisisReports.length;
@@ -218,7 +234,7 @@ function renderCharts(): void {
     { color: css('--cult'), value: (s) => s.population * s.cultureShare },
     { color: css('--spec'), value: (s) => s.species, axis: 'right' },
   ], world.events);
-  drawSpeciesChart(chartSpecies, world.census, world.events);
+  drawSpeciesChart(chartSpecies, world.census, world.events, world.leader?.id ?? null);
   drawChart(chartTraits, samples, [
     { color: css('--size'), value: (s) => (s.avgSize - LIMITS.size[0]) / (LIMITS.size[1] - LIMITS.size[0]) },
     { color: css('--speed'), value: (s) => (s.avgSpeed - LIMITS.speed[0]) / (LIMITS.speed[1] - LIMITS.speed[0]) },
@@ -232,11 +248,12 @@ function loop(): void {
     const n = Number(speedIn.value);
     for (let i = 0; i < n; i++) { scheduled(); world.step(); }
   }
-  drawWorld(worldCanvas, world, selected);
+  drawWorld(worldCanvas, world, selected, Number(zoomIn.value));
   if (frame++ % 10 === 0) {
     renderStats();
     renderCharts();
     renderReport();
+    renderLeader();
     if (selected) renderSelected();
   }
   requestAnimationFrame(loop);
