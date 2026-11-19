@@ -30,8 +30,10 @@ Begleitet die Blog-Artikel „Die Kambrische Explosion der Software“ und
 ```sh
 npm install
 npm run dev        # Entwicklungs-Server
-npm test           # Tests (Vitest)
+npm test           # Regeltests + Golden Master (Vitest, ~30 s)
+npm run test:szenarien   # Gesamtverhalten über 5 Seeds (~3 Min.)
 npm run build      # Typprüfung + Build nach dist/
+node scripts/leistung.ts 3000 2400 1600   # ms pro Schritt bei voller Population
 node scripts/headless.ts 16000 42 50 0 eiszeit@6000,vulkan@13000   # ohne Oberfläche: Ticks, Seed, Anschwung, Augen für alle ab (0 = nie), Krisen
 ```
 
@@ -39,9 +41,11 @@ URL-Parameter: `?seed=42`, `?vorlauf=4000` (Schritte vorrechnen), `?augen=2000` 
 
 ## Aufbau
 
-- `src/core/` – Simulation ohne Browser-Abhängigkeit (deterministisch per Seed, testbar)
+- `src/core/` – Simulation ohne Browser-Abhängigkeit (deterministisch per Seed, testbar), aufgeteilt in
+  `behavior` (Wahrnehmung, Bewegung, Fressen), `culture`, `selection`, `census`, `crisis`, `food`, `traits`; `world` hält den Zustand
 - `src/ui/` – Canvas-Darstellung und Bedienung
-- `test/` – Tests
+- `test/` – Regeltests, Golden Master (bitgenauer Fingerabdruck – reines Umstrukturieren darf ihn nicht ändern), `test/szenarien/` Gesamtverhalten
+- `docs/modell.md` – **Modellbeschreibung**: alle Regeln, Parameter, Grenzen und Quellen
 
 Live: https://burger73.github.io/pbs_evosim/
 
