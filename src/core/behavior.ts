@@ -6,12 +6,60 @@ import { N_IN, think } from './brain.ts';
 import { CRISES } from './config.ts';
 import { hueDistance } from './genome.ts';
 import { wrapDelta } from './grid.ts';
+import { LIMITS } from './genome.ts';
 import { SKILL, extraBonus, has, popcount, upkeep } from './skills.ts';
-import { canEat, isHunter, isPredator, maxEnergy, radius, senseRadius, skillsOf } from './traits.ts';
+import { isHunter, isPredator, maxEnergy, radius, senseRadius, skillsOf } from './traits.ts';
 import type { World } from './world.ts';
 
 const input = new Float64Array(N_IN);
 const output = new Float64Array(2);
+const cellBuf = new Int32Array(4096);
+
+// Vorberechnete Werte je Lebewesen (Index = Position in world.organisms), gültig für einen Schritt.
+// Sie ändern sich während stepOrganisms nicht: Fähigkeiten und Kultur ändern sich erst in culture.ts,
+// Gruppen werden vorher gezählt. So wird „wer kann wen fressen“ zu ein paar Bit-Operationen.
+let cap = 0;
+let rad = new Float64Array(0);
+let skl = new Int32Array(0);
+let pred = new Uint8Array(0);
+let cult = new Uint8Array(0);
+let grp = new Int32Array(0);
+
+const B_WAFFEN = 1 << SKILL.waffen, B_HUETTE = 1 << SKILL.huette, B_METALL = 1 << SKILL.metall;
+const B_GRUPPE = 1 << SKILL.gruppe, B_BAU = 1 << SKILL.bau;
+
+/** Wie traits.canEat (Natur-Modus), aber auf den vorberechneten Werten. Muss exakt gleich rechnen! */
+function canEatI(a: number, b: number, predatorSizeRatio: number): boolean {
+  const sa = skl[a], sb = skl[b];
+  const aW = (sa & B_WAFFEN) !== 0, bW = (sb & B_WAFFEN) !== 0;
+  if (bW && !aW) return false;
+  if ((sb & B_HUETTE) !== 0 && !aW) return false;
+  const ra = rad[a], rb = rad[b];
+  if (aW && !cult[b] && ra * ((sa & B_METALL) !== 0 ? 3 : 2) > rb) return true;
+  if (!pred[a]) return false;
+  let ratio = predatorSizeRatio;
+  if ((sa & B_GRUPPE) !== 0 && grp[a] >= 2) ratio = 0.9;
+  if ((sb & B_BAU) !== 0) ratio *= 1.5;
+  if ((sb & B_GRUPPE) !== 0 && grp[b] >= 2) ratio *= 1.4;
+  return ra > ratio * rb;
+}
+
+function precompute(w: World): void {
+  const os = w.organisms, n = os.length;
+  if (n > cap) {
+    cap = Math.max(n, cap * 2, 1024);
+    rad = new Float64Array(cap); skl = new Int32Array(cap); pred = new Uint8Array(cap);
+    cult = new Uint8Array(cap); grp = new Int32Array(cap);
+  }
+  for (let i = 0; i < n; i++) {
+    const o = os[i];
+    rad[i] = radius(w.cfg, o);
+    skl[i] = skillsOf(o);
+    pred[i] = isPredator(o) ? 1 : 0;
+    cult[i] = o.genome.culture ? 1 : 0;
+    grp[i] = o.group;
+  }
+}
 
 /** Für „Gruppe“: Artgenossen (ähnliche Farbe, gleiche Rolle) in der Nähe zählen. */
 export function countGroups(w: World): void {
@@ -38,6 +86,15 @@ export function stepOrganisms(w: World): void {
   const W = cfg.width;
   const H = cfg.height;
   const crisisDef = w.crisis ? CRISES[w.crisis.kind] : null;
+  const natur = cfg.mode === 'natur';
+  const psr = cfg.predatorSizeRatio;
+  // Andere haben sich seit dem Rasteraufbau schon bewegt (höchstens maxMove) – Zellen nur mit diesem Puffer auslassen
+  const maxMove = LIMITS.speed[1] * cfg.speedScale + 1e-6;
+  precompute(w);
+  food.grid.build();
+  w.orgGrid.build();
+  const fStart = food.grid.cellStart, fItems = food.grid.items;
+  const oStart = w.orgGrid.cellStart, oItems = w.orgGrid.items;
 
   for (let idx = 0; idx < organisms.length; idx++) {
     const o = organisms[idx];
@@ -52,25 +109,37 @@ export function stepOrganisms(w: World): void {
     // --- Wahrnehmung -------------------------------------------------
     const R2 = R * R;
     let foodD2 = R2, foodDx = 0, foodDy = 0;
-    food.grid.forEachNear(o.x, o.y, R, (fi) => {
-      if (!food.alive[fi] || (food.buried[fi] && !digger)) return;
-      const dx = wrapDelta(food.x[fi] - o.x, W);
-      const dy = wrapDelta(food.y[fi] - o.y, H);
-      const d2 = dx * dx + dy * dy;
-      if (d2 < foodD2) { foodD2 = d2; foodDx = dx; foodDy = dy; }
-    });
+    const ox = o.x, oy = o.y;
+    const fAlive = food.alive, fBuried = food.buried, fX = food.x, fY = food.y;
+    let nc = food.grid.cellsNear(ox, oy, R, cellBuf, true); // Futter bewegt sich nicht: exakt
+    for (let k = 0; k < nc; k++) {
+      const c = cellBuf[k];
+      for (let i = fStart[c], e = fStart[c + 1]; i < e; i++) {
+        const fi = fItems[i];
+        if (!fAlive[fi] || (fBuried[fi] && !digger)) continue;
+        const dx = wrapDelta(fX[fi] - ox, W);
+        const dy = wrapDelta(fY[fi] - oy, H);
+        const d2 = dx * dx + dy * dy;
+        if (d2 < foodD2) { foodD2 = d2; foodDx = dx; foodDy = dy; }
+      }
+    }
     let preyD2 = R2, preyDx = 0, preyDy = 0, threatD2 = R2, threatDx = 0, threatDy = 0;
     const hunter = isHunter(o);
-    w.orgGrid.forEachNear(o.x, o.y, R, (qi) => {
-      const q = organisms[qi];
-      if (q === o || !q.alive) return;
-      const dx = wrapDelta(q.x - o.x, W);
-      const dy = wrapDelta(q.y - o.y, H);
-      const d2 = dx * dx + dy * dy;
-      if (d2 >= R2) return;
-      if (hunter && d2 < preyD2 && canEat(cfg, o, q)) { preyD2 = d2; preyDx = dx; preyDy = dy; }
-      if (d2 < threatD2 && canEat(cfg, q, o)) { threatD2 = d2; threatDx = dx; threatDy = dy; }
-    });
+    nc = w.orgGrid.cellsNear(ox, oy, R + maxMove, cellBuf, true);
+    for (let k = 0; k < nc; k++) {
+      const c = cellBuf[k];
+      for (let i = oStart[c], e = oStart[c + 1]; i < e; i++) {
+        const qi = oItems[i];
+        const q = organisms[qi];
+        if (q === o || !q.alive) continue;
+        const dx = wrapDelta(q.x - ox, W);
+        const dy = wrapDelta(q.y - oy, H);
+        const d2 = dx * dx + dy * dy;
+        if (d2 >= R2) continue;
+        if (hunter && d2 < preyD2 && natur && canEatI(idx, qi, psr)) { preyD2 = d2; preyDx = dx; preyDy = dy; }
+        if (d2 < threatD2 && natur && canEatI(qi, idx, psr)) { threatD2 = d2; threatDx = dx; threatDy = dy; }
+      }
+    }
     const sense = (d2: number, dx: number, dy: number, i: number) => {
       if (d2 >= R2) { input[i] = 0; input[i + 1] = 0; return; }
       const d = Math.sqrt(d2) || 1;
@@ -149,7 +218,7 @@ export function stepOrganisms(w: World): void {
     if (hunter && cfg.mode === 'natur') {
       w.orgGrid.forEachNear(o.x, o.y, r * 2, (qi) => {
         const q = organisms[qi];
-        if (q === o || !q.alive || !canEat(cfg, o, q)) return;
+        if (q === o || !q.alive || !canEatI(idx, qi, psr)) return;
         const dx = wrapDelta(q.x - o.x, W);
         const dy = wrapDelta(q.y - o.y, H);
         const reach = r + radius(cfg, q);
