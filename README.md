@@ -32,10 +32,10 @@ npm install
 npm run dev        # Entwicklungs-Server
 npm test           # Tests (Vitest)
 npm run build      # Typprüfung + Build nach dist/
-node scripts/headless.ts 16000 42 50 2000 eiszeit@6000,vulkan@13000   # ohne Oberfläche: Ticks, Seed, Anschwung, Augen ab, Krisen
+node scripts/headless.ts 16000 42 50 0 eiszeit@6000,vulkan@13000   # ohne Oberfläche: Ticks, Seed, Anschwung, Augen für alle ab (0 = nie), Krisen
 ```
 
-URL-Parameter: `?seed=42`, `?vorlauf=4000` (Schritte vorrechnen), `?augen=2000`, `?eiszeit=6000` / `?duerre=…` / `?vulkan=…` (bei Schritt …), `?anschwung=0..100`, `?embed` (ohne Kopfzeile).
+URL-Parameter: `?seed=42`, `?vorlauf=4000` (Schritte vorrechnen), `?augen=2000` (Augen für alle ab Schritt …; sonst entstehen sie als Fähigkeit von selbst), `?eiszeit=6000` / `?duerre=…` / `?vulkan=…` (bei Schritt …), `?anschwung=0..100`, `?embed` (ohne Kopfzeile).
 
 ## Aufbau
 

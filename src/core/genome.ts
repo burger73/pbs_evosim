@@ -13,7 +13,7 @@ export interface Genome {
   size: number;
   /** Maximale Geschwindigkeit. Schnell kostet Energie im Quadrat. */
   speed: number;
-  /** Sehweite (0..1 der maximalen Sehweite). Wirkt erst, wenn „Augen“ freigeschaltet sind. */
+  /** Sehweite (0..1 der maximalen Sehweite). Wirkt über den Tastsinn hinaus erst mit der Fähigkeit „Augen“. */
   sense: number;
   /** Ernährung: 0 = Pflanzenfresser, 1 = Räuber. */
   diet: number;

@@ -11,7 +11,7 @@
       <h1>EvoSim</h1>
       <p>
         Lebewesen mit vererbtem Körper, Gehirn und <strong>Fähigkeiten, ihre Umwelt zu beeinflussen</strong>
-        (graben, Bau, Vorrat, Netz, Rudel, Werkzeug). Niemand programmiert sie – sie entstehen durch Mutation
+        (graben, Bau, Vorrat, Netz, Rudel, Werkzeug, Augen). Niemand programmiert sie – sie entstehen durch Mutation
         und Selektion. Mit Glück zündet irgendwann <strong>Kultur</strong> und durchläuft Epochen von der Steinzeit
         bis zur Neuzeit – wenn sie groß genug bleibt. Raubbau, Seuchen und Krisen können sie zurückwerfen.
       </p>
@@ -20,9 +20,41 @@
     <main>
       <section class="stage">
         <canvas id="world" aria-label="Simulationswelt"></canvas>
-        <div class="stats" id="stats"></div>
+        <div class="paused-badge" id="pausedBadge" hidden>⏸ angehalten · Leertaste zum Weiterlaufen</div>
+        <div class="statusbar">
+          <button id="pauseQuick" type="button" class="pause-quick" title="Anhalten / weiter (Leertaste)">⏸</button>
+          <div class="stats" id="stats"></div>
+        </div>
         <div class="stats" id="cultureStatus"></div>
         <div class="leader" id="leader" hidden></div>
+
+        <figure>
+          <figcaption>Population · <span class="c-pop">alle übrigen</span> · <span class="c-pred">wilde Räuber</span> · <span class="c-cult">Kulturträger</span> · <span class="c-spec">Arten (rechte Skala)</span></figcaption>
+          <canvas id="chartPop" class="chart"></canvas>
+        </figure>
+        <figure class="nature-only">
+          <figcaption>Messlatte: Fähigkeiten je Art (logarithmisch) · dick = 🏆 Spitzenreiter · farbig = die 4 größten Arten · gestrichelt = in der Tabelle ausgewählte Art</figcaption>
+          <canvas id="chartSpecies" class="chart tall"></canvas>
+        </figure>
+        <figure>
+          <figcaption>Merkmale (Ø, 0–100 % des möglichen Bereichs) · <span class="c-size">Größe</span> · <span class="c-speed">Tempo</span> · <span class="c-sense">Sicht</span> · <span class="c-diet">Räuber-Anteil der Ernährung</span> · <span class="c-soil">Bodenfruchtbarkeit</span></figcaption>
+          <canvas id="chartTraits" class="chart"></canvas>
+        </figure>
+
+        <section class="card">
+          <h2 id="topTitle">🏆 Die 10 stärksten Arten</h2>
+          <p class="hint" id="topHint"></p>
+          <div class="table-wrap"><table class="species" id="topTable"></table></div>
+        </section>
+        <section class="card nature-only">
+          <h2>✝ Bemerkenswerte Ausgestorbene</h2>
+          <p class="hint">Arten, die einmal mindestens 30 Individuen hatten oder Spitzenreiter waren – die letzten 10. „Während“ heißt: zur Zeit der Krise verschwunden, nicht unbedingt durch sie.</p>
+          <div class="table-wrap"><table class="species" id="extinctTable"></table></div>
+        </section>
+        <section class="card">
+          <h2>Legende der Fähigkeiten</h2>
+          <dl class="legend" id="legend"></dl>
+        </section>
       </section>
 
       <aside class="panel">
@@ -55,7 +87,6 @@
 
         <fieldset class="nature-only">
           <legend>Experimente</legend>
-          <button id="eyes" type="button">👁 Augen freischalten</button>
           <label>Kultur-Anschwung (Glück für den „Kick“) <output id="boostOut"></output>
             <input id="boost" type="range" min="0" max="100" value="50" />
           </label>
@@ -75,22 +106,9 @@
           <label class="check"><input id="randomCrises" type="checkbox" /> zufällige Krisen</label>
         </fieldset>
 
-        <figure>
-          <figcaption>Population · <span class="c-pop">alle übrigen</span> · <span class="c-pred">wilde Räuber</span> · <span class="c-cult">Kulturträger</span> · <span class="c-spec">Arten</span></figcaption>
-          <canvas id="chartPop" class="chart"></canvas>
-        </figure>
-        <figure class="nature-only">
-          <figcaption>Messlatte: Fähigkeiten je Art (logarithmisch) · dick = 🏆 Spitzenreiter · farbig = die 4 größten Arten</figcaption>
-          <canvas id="chartSpecies" class="chart tall"></canvas>
-        </figure>
-        <figure>
-          <figcaption>Merkmale (Ø) · <span class="c-size">Größe</span> · <span class="c-speed">Tempo</span> · <span class="c-sense">Sicht</span> · <span class="c-diet">Räuber-Anteil der Ernährung</span> · <span class="c-soil">Bodenfruchtbarkeit</span></figcaption>
-          <canvas id="chartTraits" class="chart"></canvas>
-        </figure>
-
         <div id="report" class="report" hidden></div>
         <div id="selected" class="selected" hidden></div>
-        <p class="hint">Tipp: Klick auf ein Lebewesen zeigt sein Erbgut und seine Fähigkeiten.</p>
+        <p class="hint">Tipp: Klick auf ein Lebewesen zeigt sein Erbgut und seine Fähigkeiten. Klick auf eine Art in der Tabelle hebt sie in der Welt hervor. Leertaste: anhalten / weiter.</p>
       </aside>
     </main>
     <script type="module" src="/src/ui/main.ts"></script>

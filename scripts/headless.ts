@@ -1,5 +1,5 @@
 // Simulation ohne Oberfläche – zum Abstimmen der Parameter.
-// Aufruf: node scripts/headless.ts [ticks] [seed] [anschwung 0..100] [augenAb] [krise@tick,...]
+// Aufruf: node scripts/headless.ts [ticks] [seed] [anschwung 0..100] [augenFürAlleAb, 0 = nie] [krise@tick,...]
 //   z. B. node scripts/headless.ts 16000 7 50 2000 eiszeit@9000,duerre@13000
 import { defaultConfig, type CrisisKind } from '../src/core/config.ts';
 import { SKILLS } from '../src/core/skills.ts';
@@ -7,14 +7,14 @@ import { World } from '../src/core/world.ts';
 
 const ticks = Number(process.argv[2] ?? 12000);
 const cfg = { ...defaultConfig(), seed: Number(process.argv[3] ?? 42), cultureBoost: Number(process.argv[4] ?? 50) };
-const eyesAt = Number(process.argv[5] ?? 2000);
+const eyesAt = Number(process.argv[5] ?? 0); // 0 = nie „Augen für alle“, Augen nur als Fähigkeit
 const crises = new Map((process.argv[6] ?? '').split(',').filter(Boolean).map((s) => { const [k, t] = s.split('@'); return [Number(t), k as CrisisKind]; }));
 const w = new World(cfg);
 const t0 = performance.now();
 const every = Math.max(500, Math.round(ticks / 25 / 500) * 500);
 console.log('  tick   pop  wild arten  größe tempo  diät | Ø fähigk kickbereit  kultur Ø kult  max | Fähigkeiten-Häufigkeit');
 for (let t = 1; t <= ticks; t++) {
-  if (t === eyesAt) { cfg.eyesUnlocked = true; w.addEvent('Augen'); }
+  if (eyesAt && t === eyesAt) { cfg.eyesUnlocked = true; w.addEvent('👁️ Augen für alle'); }
   const c = crises.get(t); if (c) w.startCrisis(c);
   w.step();
   if (t % every === 0) {

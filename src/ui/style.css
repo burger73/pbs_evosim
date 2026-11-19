@@ -156,3 +156,42 @@ body.mode-schiedsrichter .nature-only { display: none; }
 .leader .swatch { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
 .leader .muted { color: var(--muted); }
 .c-soil { color: var(--soil); }
+
+/* --- Hauptspalte: Welt, Status, Diagramme, Tabellen --------------------- */
+.stage { display: flex; flex-direction: column; gap: 10px; }
+.stage .stats { margin-top: 0; }
+.statusbar { display: flex; align-items: center; gap: 12px; }
+.pause-quick { font-size: 1.15rem; line-height: 1; padding: 6px 12px; flex: none; }
+.pause-quick.paused { background: var(--accent); border-color: var(--accent); color: #fff; }
+.paused-badge {
+  position: absolute; top: 10px; left: 10px; z-index: 1; pointer-events: none;
+  background: var(--accent); color: #fff; font-weight: 600; font-size: 0.9rem;
+  padding: 4px 10px; border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+}
+.stage .chart { height: 180px; }
+.stage .chart.tall { height: 260px; }
+.stage figcaption { font-size: 0.9rem; }
+
+.card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+.card h2 { margin: 0 0 4px; font-size: 1.05rem; }
+.card .hint { margin-bottom: 6px; }
+.table-wrap { overflow-x: auto; }
+table.species { width: 100%; border-collapse: collapse; font-size: 0.92rem; font-variant-numeric: tabular-nums; }
+table.species th { text-align: left; font-weight: 600; color: var(--muted); font-size: 0.82rem; padding: 4px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+table.species td { padding: 4px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+table.species td.num, table.species th.num { text-align: right; }
+table.species td.skills { margin: 0; font-size: 0.95rem; letter-spacing: 0; white-space: nowrap; }
+table.species tbody tr:last-child td { border-bottom: none; }
+#topTable tbody tr { cursor: pointer; }
+#topTable tbody tr:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+#topTable tbody tr.picked { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+table.species .empty { color: var(--muted); text-align: center; padding: 10px; }
+.swatch { width: 12px; height: 12px; border-radius: 50%; display: inline-block; vertical-align: -1px; margin-right: 4px; }
+
+.legend { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 4px 16px; margin: 0; font-size: 0.88rem; }
+.legend div { display: flex; gap: 8px; align-items: baseline; }
+.legend dt { font-size: 1.1rem; flex: none; width: 1.6em; text-align: center; }
+.legend dd { margin: 0; color: var(--muted); }
+.legend dd b { color: var(--fg); font-weight: 600; }
+.legend .group { grid-column: 1 / -1; font-weight: 600; color: var(--fg); margin-top: 4px; font-size: 0.85rem; }
+table.species .muted { color: var(--muted); font-size: 0.85em; }

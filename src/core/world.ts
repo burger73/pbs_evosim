@@ -68,6 +68,25 @@ export interface SpeciesStat {
   predator: boolean;
   /** Fähigkeiten, die mehr als die Hälfte der Art hat. */
   common: number;
+  /** Schritt, in dem die Art zuerst gezählt wurde. */
+  born: number;
+  /** Nur im Schiedsrichter-Modus: Ø Wert des gewählten Kriteriums. */
+  score: number;
+}
+
+/** Eine bemerkenswerte ausgestorbene Art (Höchststand ≥ NOTABLE_MEMBERS oder einmal Spitzenreiter). */
+export interface ExtinctSpecies {
+  id: number;
+  hue: number;
+  born: number;
+  died: number;
+  peakMembers: number;
+  peakSkills: number;
+  /** Mehrheits-Fähigkeiten zum Zeitpunkt der besten Ø Fähigkeiten. */
+  common: number;
+  wasLeader: boolean;
+  /** Krise, während der die Art verschwand. */
+  crisis: CrisisKind | null;
 }
 
 /** Die Art mit den meisten Fähigkeiten (Ø) – der Spitzenreiter. */
@@ -112,12 +131,20 @@ export const TIPPING_SHARE = 0.1;
 export const TIPPING_SKILLS = 5;
 const MAX_SAMPLES = 2000;
 const MAX_CENSUS = 400;
+/** Ausgestorbene Arten merken, wenn sie einmal so groß waren (oder Spitzenreiter). */
+export const NOTABLE_MEMBERS = 30;
+const MAX_EXTINCT = 50;
 const BUCKETS: [string, number, number][] = [['0', 0, 0], ['1–2', 1, 2], ['3–4', 3, 4], ['5+', 5, Infinity]];
 
 interface SpeciesRecord {
   id: number;
   hue: number;
   rep: Genome;
+  born: number;
+  peakMembers: number;
+  peakSkills: number;
+  peakCommon: number;
+  wasLeader: boolean;
 }
 
 export class World {
@@ -134,6 +161,8 @@ export class World {
   events: SimEvent[] = [];
   speciesCount = 1;
   leader: Leader | null = null;
+  /** Bemerkenswerte ausgestorbene Arten, neueste zuletzt. */
+  extinct: ExtinctSpecies[] = [];
   private challenger: { id: number; streak: number } | null = null;
 
   crisis: { kind: CrisisKind; until: number; start: number } | null = null;
@@ -151,6 +180,8 @@ export class World {
 
   /** Erster Kick (Funke) und Kipppunkt der Kultur. */
   firstSpark: number | null = null;
+  /** Erste Art, in der die Mehrheit Augen hat (das „Licht geht an“). */
+  firstEyes: number | null = null;
   tippingTick: number | null = null;
 
   private tippingStreak = 0;
@@ -187,10 +218,11 @@ export class World {
     return this.cfg.baseRadius * o.genome.size;
   }
 
-  /** Effektive Sehweite: ohne Augen nur Tastsinn. */
+  /** Effektive Sehweite: ohne Augen (Fähigkeit oder „Augen für alle“) nur Tastsinn. */
   senseRadius(o: Organism): number {
     const r = o.genome.sense * this.cfg.maxSense;
-    const cap = this.cfg.eyesUnlocked ? this.cfg.maxSense : this.cfg.touchRange;
+    const eyes = this.cfg.eyesUnlocked || has(this.skillsOf(o), SKILL.augen);
+    const cap = eyes ? this.cfg.maxSense : this.cfg.touchRange;
     return Math.max(this.radius(o) + 2, Math.min(r, cap));
   }
 
@@ -246,6 +278,11 @@ export class World {
   /** Bedingung b) für den Kick erfüllt? */
   kickReady(o: Organism): boolean {
     return !o.genome.culture && popcount(o.genome.skills & GENETIC_MASK) >= this.cfg.kickMinSkills;
+  }
+
+  /** Typisches Erbgut einer lebenden Art (für das Hervorheben in der Welt). */
+  speciesRep(id: number): Genome | null {
+    return this.speciesRegistry.find((r) => r.id === id)?.rep ?? null;
   }
 
   addEvent(label: string): void {
@@ -770,23 +807,25 @@ export class World {
         if (d < best) { best = d; rec = s; }
       }
       if (!rec) {
-        rec = { id: this.nextSpeciesId++, hue: c.representative.hue, rep: c.representative };
+        rec = { id: this.nextSpeciesId++, hue: c.representative.hue, rep: c.representative, born: this.tick, peakMembers: 0, peakSkills: 0, peakCommon: 0, wasLeader: false };
         this.speciesRegistry.push(rec);
       }
       rec.rep = c.representative;
       used.add(rec.id);
-      let skills = 0, cult = 0, pred = 0;
-      const bitCount = new Array(16).fill(0);
+      let skills = 0, cult = 0, pred = 0, score = 0;
+      const judge = this.cfg.mode === 'schiedsrichter';
+      const bitCount = new Array(SKILLS.length).fill(0);
       for (const i of c.indices) {
         skills += this.skillCount(os[i]);
         if (os[i].genome.culture) cult++;
         if (this.isPredator(os[i])) pred++;
+        if (judge) score += fitness(os[i], this.cfg.fitness);
         const m = this.skillsOf(os[i]);
-        for (let b = 0; b < 16; b++) if ((m >> b) & 1) bitCount[b]++;
+        for (let b = 0; b < SKILLS.length; b++) if ((m >> b) & 1) bitCount[b]++;
       }
       let common = 0;
-      for (let b = 0; b < 16; b++) if (bitCount[b] * 2 > c.indices.length) common |= 1 << b;
-      stats.push({
+      for (let b = 0; b < SKILLS.length; b++) if (bitCount[b] * 2 > c.indices.length) common |= 1 << b;
+      const st: SpeciesStat = {
         id: rec.id,
         hue: rec.hue,
         members: Math.round(c.members * scale),
@@ -794,10 +833,28 @@ export class World {
         culture: cult / c.indices.length,
         predator: pred > c.indices.length / 2,
         common,
-      });
+        born: rec.born,
+        score: score / c.indices.length,
+      };
+      stats.push(st);
+      rec.peakMembers = Math.max(rec.peakMembers, st.members);
+      if (st.skills >= rec.peakSkills) { rec.peakSkills = st.skills; rec.peakCommon = common; }
     }
     this.updateLeader(stats);
-    // Registry schlank halten: nur Arten, die gerade leben
+    if (this.leader) { const r = this.speciesRegistry.find((x) => x.id === this.leader!.id); if (r) r.wasLeader = true; }
+    if (this.firstEyes === null && !this.cfg.eyesUnlocked && stats.some((s) => s.members >= 10 && has(s.common, SKILL.augen))) {
+      this.firstEyes = this.tick;
+      this.addEvent('👁️ erste Art mit Augen');
+    }
+    // Registry schlank halten: nur Arten, die gerade leben – bemerkenswerte Ausgestorbene merken
+    for (const r of this.speciesRegistry) {
+      if (used.has(r.id) || !(r.peakMembers >= NOTABLE_MEMBERS || r.wasLeader)) continue;
+      this.extinct.push({
+        id: r.id, hue: r.hue, born: r.born, died: this.tick, peakMembers: r.peakMembers, peakSkills: r.peakSkills,
+        common: r.peakCommon, wasLeader: r.wasLeader, crisis: this.crisis?.kind ?? null,
+      });
+    }
+    if (this.extinct.length > MAX_EXTINCT) this.extinct.splice(0, this.extinct.length - MAX_EXTINCT);
     this.speciesRegistry = this.speciesRegistry.filter((s) => used.has(s.id));
     this.speciesCount = stats.length;
     this.census.push({ tick: this.tick, species: stats });
@@ -807,7 +864,12 @@ export class World {
   /** Spitzenreiter bestimmen – mit Hysterese, damit er nicht bei jeder Zählung flackert. */
   private updateLeader(stats: SpeciesStat[]): void {
     const eligible = stats.filter((s) => s.members >= LEADER_MIN_MEMBERS && s.skills >= 1);
-    if (!eligible.length) return;
+    if (!eligible.length) {
+      // niemand qualifiziert: bisherigen Spitzenreiter mit aktuellen Zahlen weiterführen (sonst veraltete Werte)
+      const cur = this.leader ? stats.find((s) => s.id === this.leader!.id) : undefined;
+      if (cur && this.leader) this.leader = { ...this.leader, skills: cur.skills, members: cur.members, culture: cur.culture, common: cur.common };
+      return;
+    }
     const best = eligible.reduce((a, b) => (b.skills > a.skills ? b : a));
     const current = this.leader ? stats.find((s) => s.id === this.leader!.id && s.members >= LEADER_MIN_MEMBERS) : undefined;
     const toLeader = (s: SpeciesStat, since: number): Leader => ({ id: s.id, hue: s.hue, skills: s.skills, members: s.members, culture: s.culture, common: s.common, since });

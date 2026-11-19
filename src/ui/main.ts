@@ -1,8 +1,8 @@
 import './style.css';
 import { CRISES, defaultConfig, FITNESS_LABELS, type CrisisKind, type Fitness, type Mode, type SimConfig } from '../core/config.ts';
-import { LIMITS } from '../core/genome.ts';
+import { LIMITS, genomeDistance } from '../core/genome.ts';
 import { EPOCHS, SKILLS, has } from '../core/skills.ts';
-import { TIPPING_SHARE, TIPPING_SKILLS, World, type Organism } from '../core/world.ts';
+import { LEADER_MIN_MEMBERS, TIPPING_SHARE, TIPPING_SKILLS, World, type Organism, type SpeciesStat } from '../core/world.ts';
 import { css, drawChart, drawSpeciesChart, drawWorld } from './render.ts';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -19,7 +19,6 @@ const cultureEl = $('cultureStatus');
 const reportEl = $('report');
 const selectedEl = $('selected');
 const playBtn = $<HTMLButtonElement>('play');
-const eyesBtn = $<HTMLButtonElement>('eyes');
 const fitnessSel = $<HTMLSelectElement>('fitness');
 const seedIn = $<HTMLInputElement>('seed');
 const speedIn = $<HTMLInputElement>('speed');
@@ -29,6 +28,11 @@ const boostIn = $<HTMLInputElement>('boost');
 const randomIn = $<HTMLInputElement>('randomCrises');
 const zoomIn = $<HTMLInputElement>('zoom');
 const leaderEl = $('leader');
+const pauseQuick = $<HTMLButtonElement>('pauseQuick');
+const pausedBadge = $('pausedBadge');
+const topTable = $<HTMLTableElement>('topTable');
+const topHint = $('topHint');
+const extinctTable = $<HTMLTableElement>('extinctTable');
 const crisisBtns = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-crisis]'));
 
 for (const [k, label] of Object.entries(FITNESS_LABELS)) fitnessSel.add(new Option(label, k));
@@ -39,6 +43,10 @@ let running = true;
 let selected: Organism | null = null;
 let frame = 0;
 let shownReports = 0;
+/** In der Tabelle ausgewählte Art (wird in der Welt hervorgehoben). */
+let picked: number | null = null;
+/** Letzte gezeichnete Artenzählung – Leiste und Tabellen nur bei neuer Zählung neu aufbauen (sonst sterben Tooltips). */
+let shownCensus = '';
 
 function currentMode(): Mode {
   return (document.querySelector('input[name="mode"]:checked') as HTMLInputElement).value as Mode;
@@ -60,8 +68,8 @@ function restart(): void {
   selectedEl.hidden = true;
   reportEl.hidden = true;
   shownReports = 0;
-  eyesBtn.disabled = false;
-  eyesBtn.textContent = '👁 Augen freischalten';
+  picked = null;
+  shownCensus = '';
   document.body.classList.toggle('mode-natur', cfg.mode === 'natur');
   document.body.classList.toggle('mode-schiedsrichter', cfg.mode === 'schiedsrichter');
   if (cfg.mode === 'schiedsrichter') world.addEvent(`Schiedsrichter: ${FITNESS_LABELS[cfg.fitness]}`);
@@ -69,7 +77,7 @@ function restart(): void {
 
 // --- Geplante Ereignisse per URL: ?augen=T ?eiszeit=T ?duerre=T ?vulkan=T ----------
 const planned: [number, () => void][] = [];
-if (params.has('augen')) planned.push([Number(params.get('augen')), () => { if (!cfg.eyesUnlocked) eyesBtn.click(); }]);
+if (params.has('augen')) planned.push([Number(params.get('augen')), () => { if (!cfg.eyesUnlocked) { cfg.eyesUnlocked = true; world.addEvent('👁️ Augen für alle'); } }]);
 for (const kind of Object.keys(CRISES) as CrisisKind[]) {
   if (params.has(kind)) planned.push([Number(params.get(kind)), () => world.startCrisis(kind)]);
 }
@@ -97,9 +105,21 @@ document.querySelectorAll('input[name="mode"]').forEach((el) => el.addEventListe
 fitnessSel.addEventListener('change', restart);
 $('restart').addEventListener('click', restart);
 seedIn.addEventListener('change', restart);
-playBtn.addEventListener('click', () => {
-  running = !running;
+function setRunning(on: boolean): void {
+  running = on;
   playBtn.textContent = running ? '⏸ Pause' : '▶ Weiter';
+  pauseQuick.textContent = running ? '⏸' : '▶';
+  pauseQuick.classList.toggle('paused', !running);
+  pausedBadge.hidden = running;
+}
+playBtn.addEventListener('click', () => setRunning(!running));
+pauseQuick.addEventListener('click', () => setRunning(!running));
+document.addEventListener('keydown', (ev) => {
+  if (ev.code !== 'Space' || ev.repeat || ev.ctrlKey || ev.altKey || ev.metaKey) return;
+  const t = ev.target as HTMLElement;
+  if (t.closest('input, select, textarea, button')) return; // Leertaste dort nicht abfangen
+  ev.preventDefault();
+  setRunning(!running);
 });
 speedIn.addEventListener('input', updateOutputs);
 zoomIn.addEventListener('input', updateOutputs);
@@ -110,12 +130,6 @@ oxyIn.addEventListener('change', () => world.addEvent(`O₂ ${Number(oxyIn.value
 boostIn.addEventListener('input', () => { cfg.cultureBoost = Number(boostIn.value); updateOutputs(); });
 boostIn.addEventListener('change', () => world.addEvent(`Anschwung ${boostIn.value}`));
 randomIn.addEventListener('change', () => { cfg.randomCrises = randomIn.checked; });
-eyesBtn.addEventListener('click', () => {
-  cfg.eyesUnlocked = true;
-  world.addEvent('Augen');
-  eyesBtn.disabled = true;
-  eyesBtn.textContent = '👁 Augen sind freigeschaltet';
-});
 for (const b of crisisBtns) b.addEventListener('click', () => world.startCrisis(b.dataset.crisis as CrisisKind));
 
 worldCanvas.addEventListener('click', (ev) => {
@@ -137,6 +151,8 @@ const bar = (v: number, [lo, hi]: readonly [number, number]) => {
   const n = Math.round(((v - lo) / (hi - lo)) * 10);
   return '▮'.repeat(n) + '▯'.repeat(10 - n);
 };
+const fmtSkills = (v: number) => (v < 10 ? v.toFixed(1) : String(Math.round(v)));
+const swatch = (hue: number) => `<span class="swatch" style="background:hsl(${hue} 65% 52%)"></span>`;
 const icons = (mask: number) => SKILLS.filter((_, i) => has(mask, i)).map((d) => `<span title="${d.label}: ${d.effect}">${d.icon}</span>`).join(' ');
 
 function renderSelected(): void {
@@ -202,13 +218,72 @@ function renderLeader(): void {
   const l = world.leader;
   if (!l || cfg.mode !== 'natur') { leaderEl.hidden = true; return; }
   leaderEl.hidden = false;
-  const sk = l.skills < 10 ? l.skills.toFixed(1) : String(Math.round(l.skills));
   leaderEl.innerHTML = `🏆 <b>Spitzenreiter</b>
-    <span class="swatch" style="background:hsl(${l.hue} 65% 52%)"></span> Art ${l.id}
-    · Ø <b>${sk}</b> Fähigkeiten · <b>${l.members}</b> Tiere${l.culture > 0.5 ? ' · 🧠 Kultur' : ''}
+    ${swatch(l.hue)}Art ${l.id}
+    · Ø <b>${fmtSkills(l.skills)}</b> Fähigkeiten · <b>${l.members}</b> Individuen${l.culture > 0.5 ? ' · 🧠 Kultur' : ''}
     · <span class="skills">${icons(l.common) || '–'}</span>
     · führt seit ${l.since} <span class="muted">(${world.tick - l.since} Schritte)</span>`;
 }
+
+/** Top 10 lebende Arten: Natur → nach Ø Fähigkeiten, Schiedsrichter → nach dem gewählten Kriterium. */
+function renderTop(): void {
+  const census = world.census[world.census.length - 1];
+  const judge = cfg.mode === 'schiedsrichter';
+  const key = (s: SpeciesStat) => (judge ? s.score : s.skills);
+  const all = census?.species ?? [];
+  const big = all.filter((s) => s.members >= LEADER_MIN_MEMBERS);
+  const list = [...(big.length ? big : all)].sort((a, b) => key(b) - key(a) || b.members - a.members).slice(0, 10);
+  if (picked !== null && !census?.species.some((s) => s.id === picked)) picked = null; // ausgestorben
+  topHint.textContent = judge
+    ? `Sortiert nach „${FITNESS_LABELS[cfg.fitness]}“ (Ø der Art), nur Arten ab ${LEADER_MIN_MEMBERS} Individuen. Klick auf eine Zeile hebt die Art in der Welt hervor.`
+    : `Sortiert nach Ø Fähigkeiten (wie der Spitzenreiter), nur Arten ab ${LEADER_MIN_MEMBERS} Individuen. Individuen: geschätzte Zahl der Lebewesen dieser Art. Klick auf eine Zeile hebt die Art in der Welt hervor, nochmal Klick hebt es auf.`;
+  const head = `<thead><tr><th>#</th><th>Art</th><th class="num">Individuen</th>
+    ${judge ? '<th class="num">Ø Kriterium</th>' : ''}<th class="num">Ø Fähigk.</th><th>Fähigkeiten (Mehrheit)</th>
+    <th>Ernährung</th>${judge ? '' : '<th>Kultur</th>'}<th class="num">lebt seit</th></tr></thead>`;
+  const rows = list.map((s, i) => `<tr data-id="${s.id}" class="${s.id === picked ? 'picked' : ''}">
+    <td>${!judge && s.id === world.leader?.id ? '🏆' : i + 1}</td>
+    <td>${swatch(s.hue)}Art ${s.id}</td>
+    <td class="num">${s.members}</td>
+    ${judge ? `<td class="num">${s.score.toFixed(1)}</td>` : ''}
+    <td class="num">${fmtSkills(s.skills)}</td>
+    <td class="skills">${icons(s.common) || '–'}</td>
+    <td>${s.predator ? '🥩 Räuber' : '🌿 Pflanzen'}</td>
+    ${judge ? '' : `<td>${s.culture > 0 ? `🧠 ${Math.round(s.culture * 100)} %` : '–'}</td>`}
+    <td class="num">${s.born} <span class="muted">(${world.tick - s.born})</span></td></tr>`).join('');
+  topTable.innerHTML = head + `<tbody>${rows || '<tr><td colspan="9" class="empty">noch keine Arten gezählt</td></tr>'}</tbody>`;
+}
+
+function renderExtinct(): void {
+  const list = world.extinct.slice(-10).reverse();
+  const head = `<thead><tr><th>Art</th><th>lebte</th><th class="num">Höchststand</th><th class="num">beste Ø Fähigk.</th>
+    <th>Fähigkeiten (damals)</th><th>Ende</th></tr></thead>`;
+  const rows = list.map((e) => `<tr>
+    <td>${swatch(e.hue)}Art ${e.id}${e.wasLeader ? ' 🏆' : ''}</td>
+    <td>${e.born}–${e.died}</td>
+    <td class="num">${e.peakMembers} Ind.</td>
+    <td class="num">${fmtSkills(e.peakSkills)}</td>
+    <td class="skills">${icons(e.common) || '–'}</td>
+    <td>${e.crisis ? `während ${CRISES[e.crisis].icon} ${CRISES[e.crisis].label}` : '–'}</td></tr>`).join('');
+  extinctTable.innerHTML = head + `<tbody>${rows || '<tr><td colspan="6" class="empty">noch keine bemerkenswerte Art ausgestorben</td></tr>'}</tbody>`;
+}
+
+function renderLegend(): void {
+  const item = (d: (typeof SKILLS)[number]) => `<div><dt>${d.icon}</dt><dd><b>${d.label}</b> – ${d.effect}</dd></div>`;
+  const parts = ['<div class="group">Vererbt – entstehen durch Mutation, kosten laufend Energie</div>', ...SKILLS.filter((d) => d.genetic).map(item)];
+  EPOCHS.forEach((ep, i) => {
+    parts.push(`<div class="group">Erfunden in Epoche ${i + 1}: ${ep.icon} ${ep.name} – nur durch Kultur, kosten nichts</div>`);
+    parts.push(...SKILLS.filter((d) => !d.genetic && d.epoch === i + 1).map(item));
+  });
+  $('legend').innerHTML = parts.join('');
+}
+
+topTable.addEventListener('click', (ev) => {
+  const tr = (ev.target as HTMLElement).closest('tr[data-id]') as HTMLElement | null;
+  if (!tr) return;
+  const id = Number(tr.dataset.id);
+  picked = picked === id ? null : id;
+  renderTop();
+});
 
 function renderReport(): void {
   if (world.crisisReports.length === shownReports) return;
@@ -239,7 +314,7 @@ function renderCharts(): void {
     { color: css('--cult'), value: (s) => s.population * s.cultureShare },
     { color: css('--spec'), value: (s) => s.species, axis: 'right' },
   ], world.events);
-  drawSpeciesChart(chartSpecies, world.census, world.events, world.leader?.id ?? null);
+  drawSpeciesChart(chartSpecies, world.census, world.events, world.leader?.id ?? null, picked);
   drawChart(chartTraits, samples, [
     { color: css('--size'), value: (s) => (s.avgSize - LIMITS.size[0]) / (LIMITS.size[1] - LIMITS.size[0]) },
     { color: css('--speed'), value: (s) => (s.avgSpeed - LIMITS.speed[0]) / (LIMITS.speed[1] - LIMITS.speed[0]) },
@@ -254,13 +329,21 @@ function loop(): void {
     const n = Number(speedIn.value);
     for (let i = 0; i < n; i++) { scheduled(); world.step(); }
   }
-  drawWorld(worldCanvas, world, selected, Number(zoomIn.value));
+  const rep = picked !== null ? world.speciesRep(picked) : null;
+  drawWorld(worldCanvas, world, selected, Number(zoomIn.value), rep ? (o) => genomeDistance(o.genome, rep) < 0.3 : null);
   if (frame++ % 10 === 0) {
     renderStats();
     renderCharts();
     renderReport();
-    renderLeader();
     if (selected) renderSelected();
+    const last = world.census[world.census.length - 1];
+    const key = `${world.census.length}:${last?.tick}:${world.extinct.length}`;
+    if (key !== shownCensus) {
+      shownCensus = key;
+      renderLeader();
+      renderTop();
+      renderExtinct();
+    }
   }
   requestAnimationFrame(loop);
 }
@@ -268,6 +351,7 @@ function loop(): void {
 if (params.has('seed')) seedIn.value = params.get('seed')!;
 if (params.has('anschwung')) boostIn.value = params.get('anschwung')!;
 updateOutputs();
+renderLegend();
 restart();
 prerun();
 requestAnimationFrame(loop);
