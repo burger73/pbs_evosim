@@ -19,16 +19,16 @@ exports[`Golden Master – frühere Welt ohne Gelände > Natur: Augen für alle,
 
 exports[`Golden Master – frühere Welt ohne Gelände > Natur: Kultur, Eiszeit und Seuche (Seed 8) 1`] = `
 {
-  "avgSkills": 2.328205,
-  "cultureShare": 0.051282,
-  "events": 18,
+  "avgSkills": 2.027473,
+  "cultureShare": 0.010989,
+  "events": 16,
   "extinct": 42,
-  "food": 67,
-  "hash": "62152bcf",
-  "leader": 39,
-  "lines": "1:9/E1 4:1/E0",
-  "population": 195,
-  "species": 9,
+  "food": 71,
+  "hash": "5ca3c20b",
+  "leader": 78,
+  "lines": "1:1/E0 4:1/E0",
+  "population": 182,
+  "species": 7,
   "tick": 5600,
   "tipping": null,
 }
@@ -53,17 +53,17 @@ exports[`Golden Master – frühere Welt ohne Gelände > Schiedsrichter: „Wer 
 
 exports[`Golden Master – neue Welt mit Kontinenten > Kontinente, Kulturlinien, Eiszeit (Seed 8) 1`] = `
 {
-  "avgSkills": 87.308581,
-  "cultureShare": 0.943894,
-  "events": 29,
+  "avgSkills": 0.974874,
+  "cultureShare": 0,
+  "events": 15,
   "extinct": 50,
-  "food": 120,
-  "hash": "9c7e3e96",
-  "leader": 260,
-  "lines": "2:512/E4 30:3/E1 31:7/E1 33:3/E1 36:9/E1 50:14/E2 52:4/E1 58:3/E1 64:12/E1 68:3/E1 71:2/E0",
-  "population": 606,
-  "species": 20,
+  "food": 1950,
+  "hash": "2c522873",
+  "leader": 252,
+  "lines": "",
+  "population": 199,
+  "species": 17,
   "tick": 7000,
-  "tipping": 6120,
+  "tipping": null,
 }
 `;

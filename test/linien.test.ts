@@ -96,4 +96,25 @@ describe('Kulturlinien', () => {
     w.step();
     expect(t.typeAt(sailor.x, sailor.y)).toBe(WATER);
   });
+
+  it('Kulturträger fressen keine Kulturträger – auch nicht als Fleischfresser', () => {
+    const w = new World(cfg({ ...quiet, cultureBoost: 0, huntSizeBonus: 0.6 }));
+    const big = w.spawn({ ...primordialGenome(w.rng), culture: true, line: 1, size: 2, diet: 1 }, 100, 100, 10);
+    const small = w.spawn({ ...primordialGenome(w.rng), culture: true, line: 1, size: 0.6, diet: 0 }, 100, 100, 50);
+    big.learned = { mask: G(SKILL.werkzeug) | G(SKILL.waffen), extra: 0 };
+    expect(w.canEat(big, small)).toBe(false);
+    small.genome = { ...small.genome, culture: false, line: 0 };
+    expect(w.canEat(big, small)).toBe(true); // Wilde dürfen gejagt werden
+  });
+
+  it('Kulturträger jagen nur bei Hunger', () => {
+    for (const [energy, expectEaten] of [[1e4, false], [5, true]] as const) {
+      const w = new World(cfg({ ...quiet, cultureBoost: 0, reproFactor: 70 })); // normale Schwelle: Hunger = Energie < 0,5 · 70 · Fläche
+      const hunter = w.spawn({ ...primordialGenome(w.rng), culture: true, line: 1, size: 1.5, diet: 0, speed: 0.1 }, 100, 100, energy);
+      hunter.learned = { mask: G(SKILL.werkzeug) | G(SKILL.waffen), extra: 0 };
+      const prey = w.spawn({ ...primordialGenome(w.rng), size: 0.6, diet: 0, speed: 0.1 }, 103, 100, 20);
+      w.step();
+      expect(prey.alive).toBe(!expectEaten);
+    }
+  });
 });

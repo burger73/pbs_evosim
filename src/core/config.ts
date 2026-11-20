@@ -99,6 +99,18 @@ export interface SimConfig {
   maxAge: number;
 
   predationEfficiency: number;
+  /** Ab dieser Ernährung (0 = Pflanzen, 1 = Fleisch) kann ein Lebewesen jagen – Verwertung wächst mit der Ernährung. */
+  huntDiet: number;
+  /** Je fleischlicher, desto größere Beute: nötiger Größenvorteil = predatorSizeRatio − huntSizeBonus × Ernährung. 0 = aus. */
+  huntSizeBonus: number;
+  /** Wilde Jäger jagen nur, wenn ihre Energie unter diesem Anteil der Teilungsschwelle liegt (Sättigung). Infinity = immer. */
+  wildHuntHunger: number;
+  /** Kulturträger jagen nur, wenn ihre Energie unter diesem Anteil der Teilungsschwelle liegt (Hunger) – sonst rotten sie alles Wilde aus. */
+  cultureHuntHunger: number;
+  /** Jagdsinn (Geruch, Gehör): Jäger nehmen Beute bis huntSense × Ernährung wahr – auch ohne Augen. 0 = aus. */
+  huntSense: number;
+  /** Spezialisierung: Pflanzenertrag = (1 − Ernährung)^plantCurve. 1 = linear; > 1 = Allesfresser verdauen Pflanzen schlechter. */
+  plantCurve: number;
   /** Räuber muss mindestens so viel größer sein als die Beute. */
   predatorSizeRatio: number;
   bodyEnergy: number;
@@ -200,8 +212,14 @@ export function defaultConfig(): SimConfig {
     maxAge: 2500,
 
     predationEfficiency: 0.7,
+    huntDiet: 0.3,
+    plantCurve: 1,
+    huntSense: 100,
+    huntSizeBonus: 0.6,
+    cultureHuntHunger: 0.5,
+    wildHuntHunger: Infinity,
     predatorSizeRatio: 1.2,
-    bodyEnergy: 20,
+    bodyEnergy: 80,
 
     mutationRate: 1,
 
@@ -240,7 +258,8 @@ export function kickRate(boost: number): number {
   return boost <= 0 ? 0 : 1e-6 * dpow(10, boost / 25);
 }
 
-/** Die frühere Welt ohne Gelände (1200 × 800, max. 900) – für Vergleiche und den Golden Master. */
+/** Die frühere Welt ohne Gelände (1200 × 800, max. 900, alte Jagdregeln) – für Vergleiche und den Golden Master. */
 export const LEGACY_WORLD: Partial<SimConfig> = {
   width: 1200, height: 800, initialPopulation: 120, maxPopulation: 900, maxFood: 1400, foodRate: 3.5, terrain: false,
+  bodyEnergy: 20, huntSense: 0, huntSizeBonus: 0, // frühere Jagdregeln
 };
