@@ -5,6 +5,7 @@
 import type { Fitness, SimConfig } from './config.ts';
 import { hueDistance } from './genome.ts';
 import { GENETIC_MASK, SKILL, has, popcount } from './skills.ts';
+import { pow as dpow } from './dmath.ts';
 import { PREDATOR_DIET, type Organism } from './types.ts';
 
 export function radius(cfg: SimConfig, o: Organism): number {
@@ -32,9 +33,19 @@ export function isPredator(o: Organism): boolean {
   return o.genome.diet > PREDATOR_DIET;
 }
 
-/** Kann jagen: Räuber von Natur aus – oder mit Waffen. */
-export function isHunter(o: Organism): boolean {
-  return isPredator(o) || has(o.learned.mask, SKILL.waffen);
+/** Kann von Natur aus jagen (Ernährung über huntDiet). „Räuber“ in der Anzeige ist dagegen isPredator. */
+export function canHunt(cfg: SimConfig, o: Organism): boolean {
+  return o.genome.diet > cfg.huntDiet;
+}
+
+/** Kann jagen: von Natur aus – oder mit Waffen. */
+export function isHunter(cfg: SimConfig, o: Organism): boolean {
+  return canHunt(cfg, o) || has(o.learned.mask, SKILL.waffen);
+}
+
+/** Anteil des Futterwerts, den ein Lebewesen aus Pflanzen zieht. */
+export function plantFactor(cfg: SimConfig, diet: number): number {
+  return cfg.plantCurve === 1 ? 1 - diet : dpow(1 - diet, cfg.plantCurve);
 }
 
 export function canEat(cfg: SimConfig, a: Organism, b: Organism): boolean {
@@ -46,9 +57,9 @@ export function canEat(cfg: SimConfig, a: Organism, b: Organism): boolean {
   const ra = radius(cfg, a), rb = radius(cfg, b);
   // Kulturträger mit Waffen jagen alles bis doppelte Größe – außer andere Kulturträger
   if (aW && !b.genome.culture && ra * (has(sa, SKILL.metall) ? 3 : 2) > rb) return true;
-  if (!isPredator(a)) return false;
-  let ratio = cfg.predatorSizeRatio;
-  if (has(sa, SKILL.gruppe) && a.group >= 2) ratio = 0.9; // Rudeljagd
+  if (!canHunt(cfg, a)) return false;
+  let ratio = cfg.huntSizeBonus > 0 ? cfg.predatorSizeRatio - cfg.huntSizeBonus * a.genome.diet : cfg.predatorSizeRatio;
+  if (has(sa, SKILL.gruppe) && a.group >= 2) ratio = Math.min(ratio, 0.9); // Rudeljagd
   if (has(sb, SKILL.bau)) ratio *= 1.5; // aus dem Bau schwer herauszuholen
   if (has(sb, SKILL.gruppe) && b.group >= 2) ratio *= 1.4; // Schutz in der Herde
   return ra > ratio * rb;

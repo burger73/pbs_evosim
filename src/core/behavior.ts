@@ -9,7 +9,7 @@ import { wrapDelta } from './grid.ts';
 import { LIMITS } from './genome.ts';
 import { SKILL, extraBonus, has, popcount, upkeep } from './skills.ts';
 import { MOUNTAIN, WATER } from './terrain.ts';
-import { isHunter, isPredator, maxEnergy, radius, senseRadius, skillsOf } from './traits.ts';
+import { canHunt, isHunter, isPredator, maxEnergy, plantFactor, radius, senseRadius, skillsOf } from './traits.ts';
 import type { World } from './world.ts';
 import { cos as dcos, log2 as dlog2, sin as dsin } from './dmath.ts';
 
@@ -26,12 +26,13 @@ let skl = new Int32Array(0);
 let pred = new Uint8Array(0);
 let cult = new Uint8Array(0);
 let grp = new Int32Array(0);
+let diet = new Float64Array(0);
 
 const B_WAFFEN = 1 << SKILL.waffen, B_HUETTE = 1 << SKILL.huette, B_METALL = 1 << SKILL.metall;
 const B_GRUPPE = 1 << SKILL.gruppe, B_BAU = 1 << SKILL.bau, B_BOOT = 1 << SKILL.boot;
 
 /** Wie traits.canEat (Natur-Modus), aber auf den vorberechneten Werten. Muss exakt gleich rechnen! */
-function canEatI(a: number, b: number, predatorSizeRatio: number): boolean {
+function canEatI(a: number, b: number, predatorSizeRatio: number, sizeBonus = 0): boolean {
   const sa = skl[a], sb = skl[b];
   const aW = (sa & B_WAFFEN) !== 0, bW = (sb & B_WAFFEN) !== 0;
   if (bW && !aW) return false;
@@ -39,8 +40,8 @@ function canEatI(a: number, b: number, predatorSizeRatio: number): boolean {
   const ra = rad[a], rb = rad[b];
   if (aW && !cult[b] && ra * ((sa & B_METALL) !== 0 ? 3 : 2) > rb) return true;
   if (!pred[a]) return false;
-  let ratio = predatorSizeRatio;
-  if ((sa & B_GRUPPE) !== 0 && grp[a] >= 2) ratio = 0.9;
+  let ratio = sizeBonus > 0 ? predatorSizeRatio - sizeBonus * diet[a] : predatorSizeRatio;
+  if ((sa & B_GRUPPE) !== 0 && grp[a] >= 2) ratio = Math.min(ratio, 0.9);
   if ((sb & B_BAU) !== 0) ratio *= 1.5;
   if ((sb & B_GRUPPE) !== 0 && grp[b] >= 2) ratio *= 1.4;
   return ra > ratio * rb;
@@ -51,15 +52,16 @@ function precompute(w: World): void {
   if (n > cap) {
     cap = Math.max(n, cap * 2, 1024);
     rad = new Float64Array(cap); skl = new Int32Array(cap); pred = new Uint8Array(cap);
-    cult = new Uint8Array(cap); grp = new Int32Array(cap);
+    cult = new Uint8Array(cap); grp = new Int32Array(cap); diet = new Float64Array(cap);
   }
   for (let i = 0; i < n; i++) {
     const o = os[i];
     rad[i] = radius(w.cfg, o);
     skl[i] = skillsOf(o);
-    pred[i] = isPredator(o) ? 1 : 0;
+    pred[i] = canHunt(w.cfg, o) ? 1 : 0; // kann von Natur aus jagen
     cult[i] = o.genome.culture ? 1 : 0;
     grp[i] = o.group;
+    diet[i] = o.genome.diet;
   }
 }
 
@@ -112,7 +114,7 @@ export function stepOrganisms(w: World): void {
   const crisisDef = w.crisis ? CRISES[w.crisis.kind] : null;
   const terrain = w.terrain, terrainOn = cfg.terrain;
   const natur = cfg.mode === 'natur';
-  const psr = cfg.predatorSizeRatio;
+  const psr = cfg.predatorSizeRatio, hsb = cfg.huntSizeBonus;
   // Andere haben sich seit dem Rasteraufbau schon bewegt (höchstens maxMove) – Zellen nur mit diesem Puffer auslassen
   const maxMove = LIMITS.speed[1] * cfg.speedScale + 1e-6;
   precompute(w);
@@ -148,9 +150,12 @@ export function stepOrganisms(w: World): void {
         if (d2 < foodD2) { foodD2 = d2; foodDx = dx; foodDy = dy; }
       }
     }
-    let preyD2 = R2, preyDx = 0, preyDy = 0, threatD2 = R2, threatDx = 0, threatDy = 0;
-    const hunter = isHunter(o);
-    nc = w.orgGrid.cellsNear(ox, oy, R + maxMove, cellBuf, true);
+    const hunter = isHunter(cfg, o);
+    // Jagdsinn: Wer von Natur aus jagt, nimmt Beute weiter wahr (Geruch, Gehör) – je fleischlicher, desto weiter
+    const Rp = cfg.huntSense > 0 && pred[idx] ? Math.max(R, cfg.huntSense * o.genome.diet) : R;
+    const Rp2 = Rp * Rp;
+    let preyD2 = Rp2, preyDx = 0, preyDy = 0, threatD2 = R2, threatDx = 0, threatDy = 0;
+    nc = w.orgGrid.cellsNear(ox, oy, Rp + maxMove, cellBuf, true);
     for (let k = 0; k < nc; k++) {
       const c = cellBuf[k];
       for (let i = oStart[c], e = oStart[c + 1]; i < e; i++) {
@@ -160,21 +165,21 @@ export function stepOrganisms(w: World): void {
         const dx = wrapDelta(q.x - ox, W);
         const dy = wrapDelta(q.y - oy, H);
         const d2 = dx * dx + dy * dy;
-        if (d2 >= R2) continue;
-        if (hunter && d2 < preyD2 && natur && canEatI(idx, qi, psr)) { preyD2 = d2; preyDx = dx; preyDy = dy; }
-        if (d2 < threatD2 && natur && canEatI(qi, idx, psr)) { threatD2 = d2; threatDx = dx; threatDy = dy; }
+        if (d2 >= Rp2) continue;
+        if (hunter && d2 < preyD2 && natur && canEatI(idx, qi, psr, hsb)) { preyD2 = d2; preyDx = dx; preyDy = dy; }
+        if (d2 < threatD2 && natur && canEatI(qi, idx, psr, hsb)) { threatD2 = d2; threatDx = dx; threatDy = dy; }
       }
     }
-    const sense = (d2: number, dx: number, dy: number, i: number) => {
-      if (d2 >= R2) { input[i] = 0; input[i + 1] = 0; return; }
+    const sense = (d2: number, dx: number, dy: number, i: number, rad: number, rad2: number) => {
+      if (d2 >= rad2) { input[i] = 0; input[i + 1] = 0; return; }
       const d = Math.sqrt(d2) || 1;
       input[i] = (cos * dy - sin * dx) / d;
-      input[i + 1] = 1 - d / R;
+      input[i + 1] = 1 - d / rad;
     };
     input[0] = 1;
-    sense(foodD2, foodDx, foodDy, 1);
-    sense(preyD2, preyDx, preyDy, 3);
-    sense(threatD2, threatDx, threatDy, 5);
+    sense(foodD2, foodDx, foodDy, 1, R, R2);
+    sense(preyD2, preyDx, preyDy, 3, Rp, Rp2);
+    sense(threatD2, threatDx, threatDy, 5, R, R2);
     input[7] = Math.min(1, o.energy / (cfg.reproFactor * o.genome.size * o.genome.size));
 
     // --- Entscheidung & Bewegung --------------------------------------
@@ -246,7 +251,7 @@ export function stepOrganisms(w: World): void {
 
     // --- Fressen: Pflanzen -------------------------------------------
     if (o.genome.diet < 0.8) {
-      const plantGain = cfg.foodEnergy * (1 - o.genome.diet) * (has(sk, SKILL.werkzeug) ? 1.4 : 1) * (has(sk, SKILL.metall) ? 1.3 : 1) * extraBonus(o.learned.extra);
+      const plantGain = cfg.foodEnergy * plantFactor(cfg, o.genome.diet) * (has(sk, SKILL.werkzeug) ? 1.4 : 1) * (has(sk, SKILL.metall) ? 1.3 : 1) * extraBonus(o.learned.extra);
       const reach = (r + cfg.foodRadius) * (has(sk, SKILL.netz) ? 2 : 1);
       food.grid.forEachNear(o.x, o.y, reach, (fi) => {
         if (!food.alive[fi] || (food.buried[fi] && !digger)) return;
@@ -264,14 +269,15 @@ export function stepOrganisms(w: World): void {
     if (hunter && cfg.mode === 'natur') {
       w.orgGrid.forEachNear(o.x, o.y, r * 2, (qi) => {
         const q = organisms[qi];
-        if (q === o || !q.alive || !canEatI(idx, qi, psr)) return;
+        if (q === o || !q.alive || !canEatI(idx, qi, psr, hsb)) return;
         const dx = wrapDelta(q.x - o.x, W);
         const dy = wrapDelta(q.y - o.y, H);
         const reach = r + radius(cfg, q);
         if (dx * dx + dy * dy < reach * reach) {
           q.alive = false;
+          w.kills++;
           const qArea = q.genome.size * q.genome.size;
-          const eff = isPredator(o) ? o.genome.diet : 0.6; // Jäger mit Waffen verwerten Beute gut
+          const eff = canHunt(cfg, o) ? o.genome.diet : 0.6; // Jäger mit Waffen verwerten Beute gut
           o.energy += (Math.max(0, q.energy) + cfg.bodyEnergy * qArea) * cfg.predationEfficiency * eff;
           o.eaten++;
         }

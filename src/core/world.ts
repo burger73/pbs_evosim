@@ -38,6 +38,8 @@ export class World {
   generation = 0;
   samples: Sample[] = [];
   events: SimEvent[] = [];
+  /** Erfolgreiche Jagden seit Beginn (Statistik). */
+  kills = 0;
 
   // --- Teilsysteme (intern; die Oberfläche nutzt die Zugriffe weiter unten) ---
   readonly terrain: Terrain;
@@ -90,7 +92,7 @@ export class World {
   skillsOf(o: Organism): number { return T.skillsOf(o); }
   skillCount(o: Organism): number { return T.skillCount(o); }
   isPredator(o: Organism): boolean { return T.isPredator(o); }
-  isHunter(o: Organism): boolean { return T.isHunter(o); }
+  isHunter(o: Organism): boolean { return T.isHunter(this.cfg, o); }
   canEat(a: Organism, b: Organism): boolean { return T.canEat(this.cfg, a, b); }
   maxEnergy(o: Organism): number { return T.maxEnergy(this.cfg, o); }
   maxAge(o: Organism): number { return T.maxAge(this.cfg, o); }

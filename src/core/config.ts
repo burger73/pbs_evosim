@@ -99,6 +99,14 @@ export interface SimConfig {
   maxAge: number;
 
   predationEfficiency: number;
+  /** Ab dieser Ernährung (0 = Pflanzen, 1 = Fleisch) kann ein Lebewesen jagen – Verwertung wächst mit der Ernährung. */
+  huntDiet: number;
+  /** Je fleischlicher, desto größere Beute: nötiger Größenvorteil = predatorSizeRatio − huntSizeBonus × Ernährung. 0 = aus. */
+  huntSizeBonus: number;
+  /** Jagdsinn (Geruch, Gehör): Jäger nehmen Beute bis huntSense × Ernährung wahr – auch ohne Augen. 0 = aus. */
+  huntSense: number;
+  /** Spezialisierung: Pflanzenertrag = (1 − Ernährung)^plantCurve. 1 = linear; > 1 = Allesfresser verdauen Pflanzen schlechter. */
+  plantCurve: number;
   /** Räuber muss mindestens so viel größer sein als die Beute. */
   predatorSizeRatio: number;
   bodyEnergy: number;
@@ -200,6 +208,10 @@ export function defaultConfig(): SimConfig {
     maxAge: 2500,
 
     predationEfficiency: 0.7,
+    huntDiet: 0.3,
+    plantCurve: 1,
+    huntSense: 0,
+    huntSizeBonus: 0,
     predatorSizeRatio: 1.2,
     bodyEnergy: 20,
 
