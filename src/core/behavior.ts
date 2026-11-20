@@ -33,6 +33,7 @@ const B_GRUPPE = 1 << SKILL.gruppe, B_BAU = 1 << SKILL.bau, B_BOOT = 1 << SKILL.
 
 /** Wie traits.canEat (Natur-Modus), aber auf den vorberechneten Werten. Muss exakt gleich rechnen! */
 function canEatI(a: number, b: number, predatorSizeRatio: number, sizeBonus = 0): boolean {
+  if (cult[a] && cult[b]) return false; // Kulturträger fressen keine Kulturträger
   const sa = skl[a], sb = skl[b];
   const aW = (sa & B_WAFFEN) !== 0, bW = (sb & B_WAFFEN) !== 0;
   if (bW && !aW) return false;
@@ -150,7 +151,10 @@ export function stepOrganisms(w: World): void {
         if (d2 < foodD2) { foodD2 = d2; foodDx = dx; foodDy = dy; }
       }
     }
-    const hunter = isHunter(cfg, o);
+    // Kulturträger jagen nur bei Hunger – sonst rotten sie mit Waffen alles Wilde aus
+    // Satte jagen nicht: Kulturträger nur bei Hunger (sonst rotten sie alles Wilde aus), Wilde je nach wildHuntHunger
+    const hunger = o.genome.culture ? cfg.cultureHuntHunger : cfg.wildHuntHunger;
+    const hunter = isHunter(cfg, o) && (hunger === Infinity || o.energy < hunger * cfg.reproFactor * o.genome.size * o.genome.size);
     // Jagdsinn: Wer von Natur aus jagt, nimmt Beute weiter wahr (Geruch, Gehör) – je fleischlicher, desto weiter
     const Rp = cfg.huntSense > 0 && pred[idx] ? Math.max(R, cfg.huntSense * o.genome.diet) : R;
     const Rp2 = Rp * Rp;

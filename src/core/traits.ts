@@ -50,6 +50,7 @@ export function plantFactor(cfg: SimConfig, diet: number): number {
 
 export function canEat(cfg: SimConfig, a: Organism, b: Organism): boolean {
   if (cfg.mode !== 'natur') return false;
+  if (a.genome.culture && b.genome.culture) return false; // Kulturträger fressen keine Kulturträger
   const sa = skillsOf(a), sb = skillsOf(b);
   const aW = has(sa, SKILL.waffen), bW = has(sb, SKILL.waffen);
   if (bW && !aW) return false; // Waffen schützen

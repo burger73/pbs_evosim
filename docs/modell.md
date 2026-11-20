@@ -64,11 +64,22 @@ genetischer Fähigkeiten, Kulturfähigkeit (großes Gehirn) und Komplexitätskos
 Die Speichergrenze liegt beim Doppelten der Teilungsschwelle, mit 🐿️ Vorrat beim Dreifachen. Ohne diese
 Grenze würden Lebewesen an der Populationsgrenze unbegrenzt Energie horten.
 
-**Fressen:** Pflanzenfresser ernten Futter in Reichweite (🕸️ Netz verdoppelt sie). Räuber (Ernährung > 0,3)
-fressen kleinere Lebewesen: Sie müssen 1,2-mal so groß sein. Dabei gilt: 🐺 Rudeljagd senkt das auf 0,9,
-🕳️ Bau beim Opfer erhöht es um den Faktor 1,5, die Herde um den Faktor 1,4. ⚔️ Waffen schützen vor allen
-ohne Waffen und erlauben die Jagd auf alles bis zur doppelten Größe (mit ⛏️ Metall bis zur dreifachen),
-außer auf andere Kulturträger.
+**Fressen:** Pflanzenfresser ernten Futter in Reichweite (🕸️ Netz verdoppelt sie), mit Ertrag ∝ (1 − Ernährung).
+Ab Ernährung > 0,3 kann ein Lebewesen jagen. Verwertet wird Beute mit 0,7 × Ernährung, Fleisch bringt 80
+Energie pro Körperfläche (früher 20). Je fleischlicher, desto größere Beute: Nötig ist ein Größenvorteil von
+1,2 − 0,6 × Ernährung, ein reiner Fleischfresser schafft also Beute bis etwa 60 % seiner Größe
+(`huntSizeBonus`). Dazu kommt ein **Jagdsinn**: Jäger wittern Beute bis 100 × Ernährung weit, auch ohne Augen
+(`huntSense`). Weiter gilt: 🐺 Rudeljagd senkt den nötigen Vorteil auf höchstens 0,9, 🕳️ Bau beim Opfer erhöht
+ihn um den Faktor 1,5, die Herde um den Faktor 1,4. ⚔️ Waffen schützen vor allen ohne Waffen und erlauben die
+Jagd auf alles Wilde bis zur doppelten Größe (mit ⛏️ Metall bis zur dreifachen). **Kulturträger fressen keine
+Kulturträger** und jagen nur bei **Hunger** (Energie unter der Hälfte der Teilungsschwelle).
+
+*Warum so?* Vorher entstanden nie echte Fleischfresser (Ernährung ≥ 0,6). Alle wurden so klein wie möglich, ein
+Räuber musste aber 1,2-mal so groß sein wie seine Beute, und ein Fang brachte so viel wie ein Pflanzenstück. Mit
+den neuen Regeln entstehen Fleischfresser, oft 10–20 %, in einzelnen Läufen über 50 %. Sie **überjagen** ihre
+Beute aber und brechen dann zusammen: In einem Fall waren 22.838 von 24.000 Jagden „wild frisst wild“. Eine
+**stabile** Räuber-Beute-Ökologie gelingt noch nicht. Sättigung (`wildHuntHunger`) half in Versuchen nicht.
+Kandidaten für später sind Rückzugsräume und Fluchtverhalten der Beute.
 
 **Fortpflanzung und Tod:** Teilung ab Energie > 70 × Fläche. Eltern und Kind bekommen je 45 %, 10 % gehen verloren.
 Tod durch Hunger, Alter (2500, 🧥 Kleidung ×1,2, ⚕️ Medizin ×1,5) oder Gefressenwerden. Die Population ist auf
